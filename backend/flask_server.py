@@ -11,12 +11,29 @@ import time
 app = Flask(__name__)
 
 # ✅ Firebase Admin 초기화
-cred = credentials.Certificate("firebase-adminsdk.json")
+cred = credentials.Certificate("backend/firebase-adminsdk.json")
 firebase_admin.initialize_app(cred)
 
 # ✅ 메모리 기반 저장소
 registered_devices = {}      # 공개용 디바이스 (mDNS 기반)
 user_devices = {}            # 사용자별 디바이스 (인증 필요)
+
+# ✅ FCM 알림 전송 함수
+def send_fcm_notification(token, title, body):
+    headers = {
+        'Content-Type': 'application/json',
+        'Authorization': 'key=<YOUR_SERVER_KEY>',  # 🔁 여기에 FCM 서버 키 입력
+    }
+    payload = {
+        'to': token,
+        'notification': {
+            'title': title,
+            'body': body,
+        }
+    }
+    response = requests.post('https://fcm.googleapis.com/fcm/send', json=payload, headers=headers)
+    print(f"FCM 응답: {response.status_code}, {response.text}")
+
 
 # ✅ mDNS lookup 기능 통합
 def resolve_mdns(name, timeout=3):
