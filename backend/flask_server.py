@@ -17,6 +17,7 @@ firebase_admin.initialize_app(cred)
 # ✅ 메모리 기반 저장소
 registered_devices = {}      # 공개용 디바이스 (mDNS 기반)
 user_devices = {}            # 사용자별 디바이스 (인증 필요)
+user_fcm_tokens = {}         # 사용자별 FCM 토큰 저장
 
 # ✅ FCM 알림 전송 함수
 def send_fcm_notification(token, title, body):
@@ -72,6 +73,17 @@ def firebase_required(f):
             return jsonify({"error": f"Invalid token: {e}"}), 401
         return f(*args, **kwargs)
     return decorated
+
+# ✅ FCM 토큰 등록 API
+@app.route("/register_token", methods=["POST"])
+@firebase_required
+def register_fcm_token():
+    data = request.json
+    token = data.get("token")
+    if not token:
+        return jsonify({"error": "FCM token required"}), 400
+    user_fcm_tokens[request.uid] = token
+    return jsonify({"status": "token registered"})
 
 # ✅ 공개 디바이스 등록 (ESP32에서 호출)
 @app.route("/register", methods=["POST"])
