@@ -7,6 +7,7 @@ from functools import wraps
 from zeroconf import Zeroconf, ServiceBrowser, ServiceListener
 import socket
 import time
+from firebase_admin import messaging
 
 app = Flask(__name__)
 
@@ -21,19 +22,18 @@ user_fcm_tokens = {}         # 사용자별 FCM 토큰 저장
 
 # ✅ FCM 알림 전송 함수
 def send_fcm_notification(token, title, body):
-    headers = {
-        'Content-Type': 'application/json',
-        'Authorization': 'key=<YOUR_SERVER_KEY>',  # 🔁 여기에 FCM 서버 키 입력
-    }
-    payload = {
-        'to': token,
-        'notification': {
-            'title': title,
-            'body': body,
-        }
-    }
-    response = requests.post('https://fcm.googleapis.com/fcm/send', json=payload, headers=headers)
-    print(f"FCM 응답: {response.status_code}, {response.text}")
+    message = messaging.Message(
+        notification=messaging.Notification(
+            title=title,
+            body=body
+        ),
+        token=token
+    )
+    try:
+        response = messaging.send(message)
+        print(f"✅ FCM 메시지 전송됨: {response}")
+    except Exception as e:
+        print(f"❌ FCM 전송 실패: {e}")
 
 
 # ✅ mDNS lookup 기능 통합
