@@ -156,5 +156,31 @@ def stream():
     except requests.RequestException as e:
         return Response(f"Stream error: {str(e)}", status=503)
 
+# ✅ 디바이스 이름별 스트림 프록시
+@app.route("/stream/<device>")
+def stream_device(device):
+    resolved_ip = registered_devices.get(device) or resolve_mdns(device)
+    if not resolved_ip:
+        return Response("Device not found", status=404)
+    try:
+        r = requests.get(f"http://{resolved_ip}/stream", stream=True, timeout=5)
+        return Response(
+            stream_with_context(r.iter_content(chunk_size=1024)),
+            content_type=r.headers.get("Content-Type", "multipart/x-mixed-replace")
+        )
+    except requests.RequestException as e:
+        return Response(f"Stream error: {str(e)}", status=503)
+
+# ✅ AI+센서 감지 시 알림 전송용 API
+@app.route("/alert", methods=["POST"])
+def alert():
+    data = request.get_json()
+    if data.get("flame") == 1:
+        device = data.get("device", "(unknown)")
+        print(f"🔥 불꽃 감지됨! [디바이스: {device}]")
+        for uid, token in user_fcm_tokens.items():
+            send_fcm_notification(token, "불꽃 감지", f"🔥 {device} 장치에서 불꽃이 감지되었습니다.")
+    return jsonify({"received": True})
+
 if __name__ == '__main__':
     app.run(host="0.0.0.0", port=8080, debug=True)

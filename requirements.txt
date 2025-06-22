@@ -2,3 +2,7 @@ flask
 requests
 zeroconf
 firebase-admin
+torch>=1.12.0
+torchvision>=0.13.0
+opencv-python>=4.5.0
+numpy>=1.21.0
