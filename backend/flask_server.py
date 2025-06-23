@@ -5,22 +5,29 @@ import firebase_admin
 from firebase_admin import credentials, auth
 from functools import wraps
 from zeroconf import Zeroconf, ServiceBrowser, ServiceListener
-import socket
-import time
 from firebase_admin import messaging
+<<<<<<< Updated upstream
 # flask_server.py 맨 위쪽
 from flask import Flask, jsonify, request, Response
 from flask_cors import CORS               # ← 추가
+=======
+import subprocess
+>>>>>>> Stashed changes
 
 app = Flask(__name__)
 # 모든 경로에 모든 Origin 허용 (개발용)
 CORS(app, resources={r"/*": {"origins": "*"}}, supports_credentials=True)
 # ✅ Firebase Admin 초기화
+<<<<<<< Updated upstream
 cred = credentials.Certificate("firebase-adminsdk.json")
+=======
+cred = credentials.Certificate("./firebase-adminsdk.json")
+>>>>>>> Stashed changes
 firebase_admin.initialize_app(cred)
 
 # ✅ 메모리 기반 저장소
 registered_devices = {}      # 공개용 디바이스 (mDNS 기반)
+index=0
 user_devices = {}            # 사용자별 디바이스 (인증 필요)
 user_fcm_tokens = {}         # 사용자별 FCM 토큰 저장
 
@@ -40,6 +47,7 @@ def send_fcm_notification(token, title, body):
         print(f"❌ FCM 전송 실패: {e}")
 
 
+<<<<<<< Updated upstream
 # ✅ mDNS lookup 기능 통합
 
 
@@ -77,6 +85,8 @@ def resolve_mdns(name, timeout=3):
     return None
 
 
+=======
+>>>>>>> Stashed changes
 # ✅ Firebase 토큰 검증 데코레이터
 def firebase_required(f):
     @wraps(f)
@@ -108,11 +118,22 @@ def register_fcm_token():
 @app.route("/register", methods=["POST"])
 def register():
     data = request.json
-    name = data.get("device_name")
     ip = data.get("ip")
-    if name and ip:
+    name = data.get("device_name")
+    if ip:
+        index = index + 1
         registered_devices[name] = ip
-        return jsonify({"status": "ok", "device_name": name})
+         # 등록된 디바이스에 대해 AI 분석 프로세스 실행
+        try:
+            subprocess.Popen(
+                ["python", "stream_flame_detection.py", "--ip", ip],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL
+            )
+            print(f"🚀 AI 프로세스 시작: {ip}")
+        except Exception as e:
+            print(f"❌ AI 프로세스 실행 실패: {e}")
+        return jsonify({"status": "ok", "device_id": index, "device_name":name, "device_ip":ip})
     return jsonify({"error": "Invalid payload"}), 400
 
 # ✅ 공개 디바이스 목록 조회
@@ -197,7 +218,7 @@ def alert():
     if data.get("flame") == 1:
         device = data.get("device", "(unknown)")
         print(f"🔥 불꽃 감지됨! [디바이스: {device}]")
-        for uid, token in user_fcm_tokens.items():
+        for token in user_fcm_tokens.items():
             send_fcm_notification(token, "불꽃 감지", f"🔥 {device} 장치에서 불꽃이 감지되었습니다.")
     return jsonify({"received": True})
 

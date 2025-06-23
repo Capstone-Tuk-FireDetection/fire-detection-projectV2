@@ -1,32 +1,11 @@
-
 import requests
-
-def send_alert_to_flask(result):
-    try:
-        response = requests.post(
-            "http://espcam2.local:8080/alert",
-            json={"flame": result}
-        )
-        print("알림 전송:", response.status_code, response.text)
-    except Exception as e:
-        print("Flask 전송 실패:", e)
-
-def read_flame_sensor():
-    try:
-        response = requests.get("http://espcam2.local/flame", timeout=1)
-        if response.ok:
-            return response.json().get("flame", -1)
-    except:
-        pass
-    return -1
-
+import argparse
 import cv2
 import torch
 import torch.nn as nn
 from torchvision import transforms
-from datetime import datetime
 
-# 모델 클래스 정의 (학습할 때와 같아야 함)
+# 🔥 AI 모델 정의
 class FlameClassifier(nn.Module):
     def __init__(self):
         super(FlameClassifier, self).__init__()
@@ -34,7 +13,7 @@ class FlameClassifier(nn.Module):
         self.conv2 = nn.Conv2d(16, 32, kernel_size=3, padding=1)
         self.pool = nn.MaxPool2d(2, 2)
         self.fc1 = nn.Linear(32 * (64 // 4) * (64 // 4), 128)
-        self.fc2 = nn.Linear(128, 2)  # flame / no_flame
+        self.fc2 = nn.Linear(128, 2)
 
     def forward(self, x):
         x = self.pool(torch.relu(self.conv1(x)))
@@ -44,65 +23,90 @@ class FlameClassifier(nn.Module):
         x = self.fc2(x)
         return x
 
-# 디바이스 설정
-device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+# 📨 Flask 서버로 알림 전송
+def send_alert_to_flask(server_url):
+    try:
+        response = requests.post(
+            f"{server_url}/alert",
+            json={"flame": 1}
+        )
+        print("알림 전송:", response.status_code, response.text)
+    except Exception as e:
+        print("Flask 전송 실패:", e)
 
-# 모델 로드
-model = FlameClassifier().to(device)
-model.load_state_dict(torch.load('flame_cnn.pth', map_location=device))
-model.eval()
+# 🔎 불꽃 센서 값 읽기
+def read_flame_sensor(ip):
+    try:
+        response = requests.get(f"http://{ip}/flame", timeout=1)
+        if response.ok:
+            return response.json().get("flame", -1)
+    except:
+        pass
+    return -1
 
-# 이미지 전처리 함수
-transform = transforms.Compose([
-    transforms.ToPILImage(),
-    transforms.Resize((64, 64)),
-    transforms.ToTensor(),
-    transforms.Normalize((0.5,), (0.5,))
-])
+# 🔍 실시간 AI 추론 루프
+def run_inference(ip, server_url):
+    stream_url = f"http://{ip}/stream"
+    cap = cv2.VideoCapture(stream_url)
+    if not cap.isOpened():
+        raise RuntimeError(f'스트림 열기 실패: {stream_url}')
 
-# 스트리밍 URL
-stream_url = "http://espcam2.local/stream"
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    model = FlameClassifier().to(device)
+    model.load_state_dict(torch.load('./flame_cnn.pth', map_location=device))
+    model.eval()
 
-# VideoCapture 열기
-cap = cv2.VideoCapture(stream_url)
-if not cap.isOpened():
-    raise RuntimeError('스트림 열기 실패: ' + stream_url)
+    print(f"[{ip}] 스트리밍 시작, 불꽃 감지 중 (AND 조건)...")
 
-print("스트리밍 시작, 불꽃 감지 중...")
+    transform = transforms.Compose([
+        transforms.ToPILImage(),
+        transforms.Resize((64, 64)),
+        transforms.ToTensor(),
+        transforms.Normalize((0.5,), (0.5,))
+    ])
 
-try:
-    while True:
-        ret, frame = cap.read()
-        if not ret:
-            print('프레임 읽기 실패, 종료')
-            break
+    try:
+        while True:
+            ret, frame = cap.read()
+            if not ret:
+                print('프레임 읽기 실패')
+                break
 
-        # 프레임 전처리
-        input_frame = transform(frame).unsqueeze(0).to(device)
+            # 🔍 AI 추론
+            input_tensor = transform(frame).unsqueeze(0).to(device)
+            with torch.no_grad():
+                output = model(input_tensor)
+                flame_prob = torch.softmax(output, dim=1)[0][0].item()
 
-        # 불꽃 판별
-        with torch.no_grad():
-            outputs = model(input_frame)
-            probabilities = torch.softmax(outputs, dim=1)
-            flame_prob = probabilities[0][0].item()  # 클래스 0번이 flame
+            # 🔥 불꽃 센서 값
+            sensor_value = read_flame_sensor(ip)
 
-        # 감도 임계값 설정
-        threshold = 0.85  # 85% 이상일 때만 flame으로 판단
+            # ✅ AND 조건: AI + 센서 모두 감지해야 알림
+            threshold = 0.85
+            ai_detected = flame_prob > threshold
+            sensor_detected = (sensor_value == 1)
+            final_result = ai_detected and sensor_detected
 
-        if flame_prob > threshold:
-            text = f"Flame Detected ({flame_prob:.2f})"
-            color = (0, 0, 255)
-        else:
-            text = f"No Flame ({flame_prob:.2f})"
-            color = (0, 255, 0)
+            if final_result:
+                send_alert_to_flask(server_url)
 
-        # 프레임에 텍스트 출력
-        cv2.putText(frame, text, (10, 30),
-                    cv2.FONT_HERSHEY_SIMPLEX, 1, color, 2)
+            # 디버깅용 표시
+            status = "🔥 FLAME DETECTED" if final_result else f"AI:{ai_detected} / SENSOR:{sensor_detected}"
+            color = (0, 0, 255) if final_result else (200, 200, 200)
+            cv2.putText(frame, status, (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, color, 2)
 
-except KeyboardInterrupt:
-    print("Ctrl+C로 종료")
+    except KeyboardInterrupt:
+        print("Ctrl+C 종료")
 
-finally:
-    cap.release()
-    print("리소스 해제 완료")
+    finally:
+        cap.release()
+        print("종료됨")
+
+# 🏁 진입점
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--ip", required=True, help="ESP32-CAM IP 주소")
+    parser.add_argument("--server_url", default="http://localhost:8080", help="Flask 서버 주소")
+    args = parser.parse_args()
+
+    run_inference(args.ip, args.server_url)
