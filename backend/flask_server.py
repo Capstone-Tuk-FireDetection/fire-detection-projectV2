@@ -177,6 +177,20 @@ def alert():
             )
     return jsonify({"received": True})
 
+# ✅ test 알림 수신 API
+@app.route("/testalert", methods=["POST"])
+def alert():
+    data = request.get_json()
+    device = data.get("device", "(unknown)")
+    print(f"🔥 불꽃 감지됨! [디바이스: {device}]")
+    for token in fcm_tokens:
+        send_fcm_notification(
+            token,
+            "test",
+            f"{device} 장치에서 불꽃이 감지되었습니다!"
+        )
+    return jsonify({"received": True})
+
 
 if __name__ == '__main__':
     app.run(host="0.0.0.0", port=8080, debug=True)
