@@ -16,7 +16,7 @@ firebase_admin.initialize_app(cred)
 # ✅ 메모리 저장소
 registered_devices = {}
 user_devices = {}
-user_fcm_tokens = {}
+fcm_tokens = []
 device_index = 0  # 전역 인덱스
 
 # ✅ FCM 알림 함수
@@ -49,12 +49,16 @@ def firebase_required(f):
 
 # ✅ FCM 토큰 등록
 @app.route("/register_token", methods=["POST"])
-@firebase_required
 def register_fcm_token():
-    token = request.json.get("token")
+    data = request.json
+    token = data.get("token")
     if not token:
         return jsonify({"error": "FCM token required"}), 400
-    user_fcm_tokens[request.uid] = token
+
+    if token not in fcm_tokens:
+        fcm_tokens.append(token)
+        print(f"✅ FCM 토큰 등록됨: {token}")
+
     return jsonify({"status": "token registered"})
 
 # ✅ 디바이스 등록
@@ -165,7 +169,7 @@ def alert():
     if data.get("flame") == 1:
         device = data.get("device", "(unknown)")
         print(f"🔥 불꽃 감지됨! [디바이스: {device}]")
-        for token in user_fcm_tokens.values():
+        for token in fcm_tokens:
             send_fcm_notification(
                 token,
                 "🔥 화재 경보",
