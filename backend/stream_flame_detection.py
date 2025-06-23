@@ -35,7 +35,7 @@ def send_alert_to_flask(server_url, device_name=None):
 
 def read_flame_sensor(server_url, device_name):
     try:
-        response = requests.get(f"{server_url}/flame", timeout=1)
+        response = requests.get(f"{server_url}/flame/{device_name}", timeout=1)
         if response.ok:
             return response.json().get("flame", -1)
     except:

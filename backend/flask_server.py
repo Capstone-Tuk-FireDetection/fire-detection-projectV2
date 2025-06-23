@@ -132,6 +132,18 @@ def get_flame():
     except requests.RequestException as e:
         return jsonify({"flame": -1, "error": str(e)}), 503
 
+@app.route("/flame/<device>")
+def get_flame_by_name(device):
+    ip = registered_devices.get(device)
+    if not ip:
+        return jsonify({"flame": -1, "error": "Device not found"}), 404
+    try:
+        resp = requests.get(f"http://{ip}/flame", timeout=2)
+        return jsonify(resp.json())
+    except requests.RequestException as e:
+        return jsonify({"flame": -1, "error": str(e)}), 503
+
+
 # ✅ 스트리밍 (기본 디바이스)
 @app.route("/stream")
 def stream():
