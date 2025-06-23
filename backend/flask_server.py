@@ -8,11 +8,15 @@ from zeroconf import Zeroconf, ServiceBrowser, ServiceListener
 import socket
 import time
 from firebase_admin import messaging
+# flask_server.py 맨 위쪽
+from flask import Flask, jsonify, request, Response
+from flask_cors import CORS               # ← 추가
 
 app = Flask(__name__)
-
+# 모든 경로에 모든 Origin 허용 (개발용)
+CORS(app, resources={r"/*": {"origins": "*"}}, supports_credentials=True)
 # ✅ Firebase Admin 초기화
-cred = credentials.Certificate("backend/firebase-adminsdk.json")
+cred = credentials.Certificate("firebase-adminsdk.json")
 firebase_admin.initialize_app(cred)
 
 # ✅ 메모리 기반 저장소
@@ -37,26 +41,41 @@ def send_fcm_notification(token, title, body):
 
 
 # ✅ mDNS lookup 기능 통합
+
+
 def resolve_mdns(name, timeout=3):
+    # 1) OS가 이미 .local 이름을 해석할 수 있으면 바로 사용
+    try:
+        return socket.gethostbyname(f"{name}.local")
+    except socket.gaierror:
+        pass                     # 실패하면 Zeroconf로 넘어감
+
+    # 2) Zeroconf로 정확히 ‘name’만 필터링
     class MDNSListener(ServiceListener):
-        def __init__(self):
+        def __init__(self, target):
             self.address = None
-        def add_service(self, zeroconf, type, name):
-            info = zeroconf.get_service_info(type, name)
-            if info:
-                addr = socket.inet_ntoa(info.addresses[0])
-                self.address = addr
+            self.target = f"{target}._http._tcp.local."
+
+        def add_service(self, zeroconf, type, svc_name):
+            if svc_name != self.target:
+                return            # 다른 장치 패스
+            info = zeroconf.get_service_info(type, svc_name, timeout=1000)
+            if info and info.addresses:
+                self.address = socket.inet_ntoa(info.addresses[0])
 
     zeroconf = Zeroconf()
-    listener = MDNSListener()
+    listener = MDNSListener(name)
     ServiceBrowser(zeroconf, "_http._tcp.local.", listener)
+
     for _ in range(timeout * 10):
         if listener.address:
             zeroconf.close()
             return listener.address
         time.sleep(0.1)
+
     zeroconf.close()
     return None
+
 
 # ✅ Firebase 토큰 검증 데코레이터
 def firebase_required(f):

@@ -1,5 +1,5 @@
 #pragma once
 
 // Replace these with your WiFi credentials
-#define WIFI_SSID      "G4896"
-#define WIFI_PASSWORD  "71503569"
+#define WIFI_SSID      "A"
+#define WIFI_PASSWORD  "1234qwer"
