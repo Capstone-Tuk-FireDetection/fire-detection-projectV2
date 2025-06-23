@@ -24,12 +24,14 @@ class FlameClassifier(nn.Module):
         return x
 
 # 📨 Flask 서버로 알림 전송
-def send_alert_to_flask(server_url):
+def send_alert_to_flask(server_url, device_name=None, ip=None):
+    payload = {"flame": 1}
+    if device_name:
+        payload["device"] = device_name
+    elif ip:
+        payload["device"] = ip  # IP라도 전달
     try:
-        response = requests.post(
-            f"{server_url}/alert",
-            json={"flame": 1}
-        )
+        response = requests.post(f"{server_url}/alert", json=payload)
         print("알림 전송:", response.status_code, response.text)
     except Exception as e:
         print("Flask 전송 실패:", e)
@@ -88,7 +90,7 @@ def run_inference(ip, server_url):
             final_result = ai_detected and sensor_detected
 
             if final_result:
-                send_alert_to_flask(server_url)
+                send_alert_to_flask(server_url, ip=ip)
 
             # 디버깅용 표시
             status = "🔥 FLAME DETECTED" if final_result else f"AI:{ai_detected} / SENSOR:{sensor_detected}"

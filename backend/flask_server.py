@@ -6,23 +6,15 @@ from firebase_admin import credentials, auth
 from functools import wraps
 from zeroconf import Zeroconf, ServiceBrowser, ServiceListener
 from firebase_admin import messaging
-<<<<<<< Updated upstream
-# flask_server.py 맨 위쪽
 from flask import Flask, jsonify, request, Response
 from flask_cors import CORS               # ← 추가
-=======
 import subprocess
->>>>>>> Stashed changes
 
 app = Flask(__name__)
 # 모든 경로에 모든 Origin 허용 (개발용)
 CORS(app, resources={r"/*": {"origins": "*"}}, supports_credentials=True)
 # ✅ Firebase Admin 초기화
-<<<<<<< Updated upstream
-cred = credentials.Certificate("firebase-adminsdk.json")
-=======
 cred = credentials.Certificate("./firebase-adminsdk.json")
->>>>>>> Stashed changes
 firebase_admin.initialize_app(cred)
 
 # ✅ 메모리 기반 저장소
@@ -47,46 +39,6 @@ def send_fcm_notification(token, title, body):
         print(f"❌ FCM 전송 실패: {e}")
 
 
-<<<<<<< Updated upstream
-# ✅ mDNS lookup 기능 통합
-
-
-def resolve_mdns(name, timeout=3):
-    # 1) OS가 이미 .local 이름을 해석할 수 있으면 바로 사용
-    try:
-        return socket.gethostbyname(f"{name}.local")
-    except socket.gaierror:
-        pass                     # 실패하면 Zeroconf로 넘어감
-
-    # 2) Zeroconf로 정확히 ‘name’만 필터링
-    class MDNSListener(ServiceListener):
-        def __init__(self, target):
-            self.address = None
-            self.target = f"{target}._http._tcp.local."
-
-        def add_service(self, zeroconf, type, svc_name):
-            if svc_name != self.target:
-                return            # 다른 장치 패스
-            info = zeroconf.get_service_info(type, svc_name, timeout=1000)
-            if info and info.addresses:
-                self.address = socket.inet_ntoa(info.addresses[0])
-
-    zeroconf = Zeroconf()
-    listener = MDNSListener(name)
-    ServiceBrowser(zeroconf, "_http._tcp.local.", listener)
-
-    for _ in range(timeout * 10):
-        if listener.address:
-            zeroconf.close()
-            return listener.address
-        time.sleep(0.1)
-
-    zeroconf.close()
-    return None
-
-
-=======
->>>>>>> Stashed changes
 # ✅ Firebase 토큰 검증 데코레이터
 def firebase_required(f):
     @wraps(f)
@@ -218,8 +170,12 @@ def alert():
     if data.get("flame") == 1:
         device = data.get("device", "(unknown)")
         print(f"🔥 불꽃 감지됨! [디바이스: {device}]")
-        for token in user_fcm_tokens.items():
-            send_fcm_notification(token, "불꽃 감지", f"🔥 {device} 장치에서 불꽃이 감지되었습니다.")
+        for token in user_fcm_tokens.values():
+            send_fcm_notification(
+                token,
+                "🔥 화재 경보",
+                f"{device} 장치에서 불꽃이 감지되었습니다!"
+            )
     return jsonify({"received": True})
 
 if __name__ == '__main__':
