@@ -1,7 +1,6 @@
 #include "esp_camera.h"
 #include <WiFi.h>
 #include <HTTPClient.h> 
-#include <ESPmDNS.h>  // ✅ mDNS 사용을 위한 라이브러리 추가
 
 #define CAMERA_MODEL_AI_THINKER
 #include "camera_pins.h"
@@ -77,28 +76,21 @@ void setup() {
   }
   Serial.println("\nWiFi connected");
 
-  // ✅ mDNS 서비스 시작
-  if (MDNS.begin("espcam2")) {
-    Serial.println("mDNS responder started as 'espcam2.local'");
-  } else {
-    Serial.println("mDNS responder failed to start");
-  }
-
   startCameraServer();
   xTaskCreatePinnedToCore(sensorTask, "Sensor Task", 2048, NULL, 1, NULL, 1);
   registerDevice();      
   Serial.print("Camera Ready! Open http://");
   Serial.print(WiFi.localIP());
-  Serial.println(" or http://espcam2.local to connect");
+  Serial.println(" or http://espcam1.local to connect");
   
 }
 void registerDevice() {
   HTTPClient http;
   // Flask 서버 IP:포트로 수정 (예: 192.168.0.10)
-  http.begin("http://127.0.0.1:8080/register");
+  http.begin("http://192.168.206.187/register");
   http.addHeader("Content-Type", "application/json");
 
-  String payload = "{\"device_name\":\"espcam2\","
+  String payload = "{\"device_name\":\"espcam1\","
                    "\"ip\":\"" + WiFi.localIP().toString() + "\"}";
   http.POST(payload);
   http.end();
