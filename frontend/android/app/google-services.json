@@ -1,0 +1,67 @@
+{
+  "project_info": {
+    "project_number": "33909260846",
+    "project_id": "firedetection-3d3d5",
+    "storage_bucket": "firedetection-3d3d5.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:33909260846:android:ca4276340708229a6055bf",
+        "android_client_info": {
+          "package_name": "com.example.frontendv2"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAMasx4UdS16A3OHKUKeaXvg9mvnqmsKvk"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:33909260846:android:e51760ce2c2dc9fd6055bf",
+        "android_client_info": {
+          "package_name": "com.example.frontendv22"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAMasx4UdS16A3OHKUKeaXvg9mvnqmsKvk"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:33909260846:android:915bd07fc19320c66055bf",
+        "android_client_info": {
+          "package_name": "com.example.frontendv23"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAMasx4UdS16A3OHKUKeaXvg9mvnqmsKvk"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

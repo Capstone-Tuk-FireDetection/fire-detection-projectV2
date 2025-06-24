@@ -1,0 +1,31 @@
+name: frontendv23
+description: "A new Flutter project."
+publish_to: 'none'
+version: 0.1.0
+
+environment:
+  sdk: ^3.6.1
+
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_web_plugins:
+    sdk: flutter  
+
+  firebase_core: ^3.0.0
+  firebase_auth: ^5.1.0
+  firebase_messaging: 15.2.7 
+  flutter_local_notifications: ^14.0.0 
+   
+  # ---- 네트워크 ----
+  http: ^0.13.6          # ⬅️ ❶ 다운그레이드
+  flutter_mjpeg: ^2.0.4  # ⬅️ ❷ 그대로 사용
+
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^5.0.0
+
+flutter:
+  uses-material-design: true
