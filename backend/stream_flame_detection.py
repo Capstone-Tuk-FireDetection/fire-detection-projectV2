@@ -35,6 +35,16 @@ def send_alert_to_flask(server_url, device_name=None):
     except Exception as e:
         print("Flask 전송 실패:", e)
 
+# 👈 [추가] 디바이스 상태 업데이트 함수
+def update_device_status(server_url, device_name, status):
+    try:
+        payload = {"device_name": device_name, "status": status}
+        requests.post(f"{server_url}/device_status", json=payload, timeout=2)
+        print(f"[{device_name}] 상태 업데이트 전송: {status}")
+    except Exception as e:
+        print(f"[{device_name}] 상태 업데이트 실패: {e}")
+
+
 def read_flame_sensor(server_url, device_name):
     try:
         response = requests.get(f"{server_url}/flame/{device_name}", timeout=1)
@@ -45,7 +55,13 @@ def read_flame_sensor(server_url, device_name):
     return -1
 
 def run_inference(device_name, server_url):
-    jpg_url = f"http://{registered_devices.get(device_name)}/jpg"
+    # 👈 [수정] registered_devices에서 ip만 추출
+    device_ip = registered_devices.get(device_name, {}).get("ip")
+    if not device_ip:
+        print(f"❌ '{device_name}'의 IP를 찾을 수 없습니다.")
+        return
+
+    jpg_url = f"http://{device_ip}/jpg"
     print(f"[{device_name}] JPEG 기반 추론 시작: {jpg_url}")
 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -62,18 +78,34 @@ def run_inference(device_name, server_url):
 
     last_alert_time = 0
     alert_interval = 30  # 초당 알림 제한
+    
+    # 👈 [추가] 연속 실패 카운터
+    failure_count = 0
+    FAILURE_THRESHOLD = 5 # 5회 연속 실패 시 오프라인 간주
 
+    # 👈 [수정] try...finally 구문으로 감싸기
     try:
+        # 👈 [추가] 시작 시 online 상태 보고
+        update_device_status(server_url, device_name, "online")
+
         while True:
             try:
                 r = requests.get(jpg_url, timeout=2)
+                r.raise_for_status() # 200 OK 아니면 예외 발생
                 np_arr = np.frombuffer(r.content, np.uint8)
                 frame = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
                 if frame is None:
-                    continue
+                    raise ValueError("프레임 디코딩 실패")
+                
+                failure_count = 0 # 👈 [추가] 성공 시 카운터 초기화
+
             except Exception as e:
-                print("❌ JPEG 요청 실패:", e)
-                time.sleep(1)
+                failure_count += 1 # 👈 [추가] 실패 시 카운터 증가
+                print(f"❌ [{device_name}] 요청 실패 ({failure_count}/{FAILURE_THRESHOLD}): {e}")
+                if failure_count >= FAILURE_THRESHOLD:
+                    print(f"🚨 [{device_name}] 오프라인으로 간주. 프로세스를 종료합니다.")
+                    break # 루프 탈출
+                time.sleep(2) # 실패 시 잠시 대기
                 continue
 
             input_tensor = transform(frame).unsqueeze(0).to(device)
@@ -101,9 +133,11 @@ def run_inference(device_name, server_url):
                 break
 
     except KeyboardInterrupt:
-        print("종료 (Ctrl+C)")
+        print(f"종료 (Ctrl+C) [{device_name}]")
 
     finally:
+        # 👈 [추가] 종료 시 offline 상태 보고
+        update_device_status(server_url, device_name, "offline")
         cv2.destroyAllWindows()
 
 # 🏁 진입점
