@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'register_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -19,13 +20,26 @@ class _LoginScreenState extends State<LoginScreen> {
     _formKey.currentState!.save();
     setState(() => _loading = true);
     try {
-      await FirebaseAuth.instance.signInWithEmailAndPassword(email: _email, password: _pw);
+      await FirebaseAuth.instance
+          .signInWithEmailAndPassword(email: _email, password: _pw);
     } on FirebaseAuthException catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(e.message ?? 'Login failed')),
       );
     } finally {
       if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  Future<void> _goToRegister() async {
+    final ok = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(builder: (_) => const RegisterScreen()),
+    );
+    if (!mounted) return;
+    if (ok == true) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('회원가입 완료! 로그인해 주세요.')),
+      );
     }
   }
 
@@ -60,6 +74,11 @@ class _LoginScreenState extends State<LoginScreen> {
                         icon: const Icon(Icons.login, size: 32),
                         onPressed: _login,
                       ),
+                const SizedBox(height: 8),
+                TextButton(
+                  onPressed: _goToRegister,
+                  child: const Text('회원가입'),
+                ),
               ]),
             ),
           ),
