@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
@@ -30,28 +31,54 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
     setState(() => _loading = true);
 
-    // 외부 연동 없이 임시 회원가입 처리 (간단 딜레이로 대체)
-    await Future.delayed(const Duration(milliseconds: 500));
+    try {
+      // Firebase에 사용자 생성
+      await FirebaseAuth.instance.createUserWithEmailAndPassword(
+        email: _email,
+        password: _pw,
+      );
 
-    if (!mounted) return;
-    setState(() => _loading = false);
+      if (!mounted) return;
 
-    await showDialog<void>(
-      context: context,
-      builder: (_) => AlertDialog(
-        title: const Text('회원가입 완료'),
-        content: Text('임시 계정이 생성되었습니다.\n\nEmail: $_email'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('확인'),
-          ),
-        ],
-      ),
-    );
+      // 성공 시 알림 후 로그인 화면으로 복귀
+      await showDialog<void>(
+        context: context,
+        builder: (_) => AlertDialog(
+          title: const Text('회원가입 완료'),
+          content: Text('계정이 성공적으로 생성되었습니다: $_email\n로그인 페이지로 이동합니다.'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('확인'),
+            ),
+          ],
+        ),
+      );
+      
+      if (mounted) Navigator.of(context).pop(true);
 
-    // 로그인 화면으로 "성공" 결과를 전달하며 복귀
-    if (mounted) Navigator.of(context).pop(true);
+    } on FirebaseAuthException catch (e) {
+      // 오류 처리
+      String message = '오류가 발생했습니다.';
+      if (e.code == 'weak-password') {
+        message = '비밀번호가 너무 약합니다.';
+      } else if (e.code == 'email-already-in-use') {
+        message = '이미 사용 중인 이메일입니다.';
+      } else if (e.code == 'invalid-email') {
+        message = '유효하지 않은 이메일 형식입니다.';
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(message)),
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('알 수 없는 오류: $e')),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _loading = false);
+      }
+    }
   }
 
   @override

@@ -1,14 +1,18 @@
 #include "esp_camera.h"
 #include <WiFi.h>
-#include <HTTPClient.h> 
+#include <HTTPClient.h>
 
 #define CAMERA_MODEL_AI_THINKER
 #include "camera_pins.h"
 
 #define FLAME_PIN 14 // Flame sensor 핀
 
+// --- 🔽 [추가/수정] 전역 변수 🔽 ---
+String server_ip; // 서버 IP를 저장할 변수
+volatile bool is_registered = false; // 등록 상태 플래그
 volatile bool allowStreaming = true;
 int cachedFlame = -1;
+// --- 🔼 [추가/수정] 전역 변수 🔼 ---
 
 void sensorTask(void *param) {
   for (;;) {
@@ -24,78 +28,18 @@ void sensorTask(void *param) {
 
 #include "wifi_config.h"
 
-const char *ssid = WIFI_SSID;
-const char *password = WIFI_PASSWORD;
-
-void startCameraServer();
-void setupLedFlash(int pin);
-
-void setup() {
-  Serial.begin(115200);
-  Serial.setDebugOutput(true);
-
-  pinMode(FLAME_PIN, INPUT);
-
-  camera_config_t config;
-  config.ledc_channel = LEDC_CHANNEL_0;
-  config.ledc_timer = LEDC_TIMER_0;
-  config.pin_d0 = Y2_GPIO_NUM;
-  config.pin_d1 = Y3_GPIO_NUM;
-  config.pin_d2 = Y4_GPIO_NUM;
-  config.pin_d3 = Y5_GPIO_NUM;
-  config.pin_d4 = Y6_GPIO_NUM;
-  config.pin_d5 = Y7_GPIO_NUM;
-  config.pin_d6 = Y8_GPIO_NUM;
-  config.pin_d7 = Y9_GPIO_NUM;
-  config.pin_xclk = XCLK_GPIO_NUM;
-  config.pin_pclk = PCLK_GPIO_NUM;
-  config.pin_vsync = VSYNC_GPIO_NUM;
-  config.pin_href = HREF_GPIO_NUM;
-  config.pin_sccb_sda = SIOD_GPIO_NUM;
-  config.pin_sccb_scl = SIOC_GPIO_NUM;
-  config.pin_pwdn = PWDN_GPIO_NUM;
-  config.pin_reset = RESET_GPIO_NUM;
-  config.xclk_freq_hz = 20000000;
-  config.frame_size = FRAMESIZE_QQVGA;
-  config.pixel_format = PIXFORMAT_JPEG;
-  config.fb_location = CAMERA_FB_IN_PSRAM;
-  config.jpeg_quality = 14;
-  config.fb_count = 1;
-  config.grab_mode = CAMERA_GRAB_LATEST;
-
-  if (esp_camera_init(&config) != ESP_OK) {
-    Serial.println("Camera init failed");
-    return;
-  }
-
-  WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
-  WiFi.setSleep(false);
-  while (WiFi.status() != WL_CONNECTED) {
-    delay(500);
-    Serial.print(".");
-  }
-  Serial.println("\nWiFi connected");
-
-  startCameraServer();
-  xTaskCreatePinnedToCore(sensorTask, "Sensor Task", 2048, NULL, 1, NULL, 1);
-  registerDevice();      
-  Serial.print("Camera Ready! Open http://");
-  Serial.print(WiFi.localIP());
-  Serial.println(" or http://espcam1.local to connect");
-  
-}
+// --- 🔽 [수정] registerDevice 함수 🔽 ---
 void registerDevice() {
+  if (server_ip.length() == 0) {
+    return; // 서버 IP가 없으면 실행하지 않음
+  }
+  if (is_registered) {
+    return; // 이미 등록되었으면 실행하지 않음
+  }
+
   HTTPClient http;
-  // Flask 서버 IP:포트로 수정 (예: 192.168.0.10)
-  http.begin("http://192.168.206.187/register");
+  String url = "http://" + server_ip + "/register";
+  http.begin(url);
   http.addHeader("Content-Type", "application/json");
 
-  String payload = "{\"device_name\":\"espcam1\","
-                   "\"ip\":\"" + WiFi.localIP().toString() + "\"}";
-  http.POST(payload);
-  http.end();
-}
-
-void loop() {
-  delay(10);
-}
+  String payload = "{\"device_name\":\"espcam1\",
