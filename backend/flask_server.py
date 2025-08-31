@@ -272,6 +272,32 @@ def stream_device(device):
     return Response(stream_with_context(generate()),
                     content_type="multipart/x-mixed-replace; boundary=frame")
 
+# ✅ 스냅샷 API
+@app.route("/snapshot/<device>")
+def snapshot_device(device):
+    doc = db.collection('devices').document(device).get()
+    if not doc.exists:
+        return Response("Device not found", status=404)
+    
+    device_info = doc.to_dict()
+    ip = device_info.get('ip')
+    if not ip:
+        return Response("Device IP not found", status=404)
+
+    try:
+        # ESP32-CAM의 캡처 엔드포인트로 요청
+        r = requests.get(f"http://{ip}/capture", timeout=5, stream=True)
+        
+        # ESP32-CAM으로부터 받은 응답 헤더를 그대로 클라이언트에 전달
+        headers = [(name, value) for (name, value) in r.raw.headers.items()]
+        
+        # 이미지 데이터를 Response 객체로 감싸서 반환
+        return Response(r.content, r.status_code, headers)
+    
+    except requests.RequestException as e:
+        print(f"❌ 스냅샷 오류({device}):", e)
+        return Response(f"Failed to get snapshot from {device}", status=503)
+
 # ✅ 알림 수신 API
 @app.route("/alert", methods=["POST"])
 def alert():

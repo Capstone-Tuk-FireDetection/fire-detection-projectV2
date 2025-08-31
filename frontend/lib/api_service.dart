@@ -27,6 +27,6 @@ class ApiService {
   }
 
   /// MJPEG 스트림 URL (단순 문자열 반환)
-  static String streamUrl([String? device]) =>
-      device == null ? '$backendBaseUrl/stream' : '$backendBaseUrl/stream/$device';
+  static String snapshotUrl([String? device]) =>
+      device == null ? '$backendBaseUrl/snapshot' : '$backendBaseUrl/snapshot/$device';
 }
