@@ -22,7 +22,7 @@ static esp_err_t discovery_handler(httpd_req_t *req) {
     
     int content_len = httpd_req_recv(req, content, sizeof(content) - 1);
     if (content_len <= 0) {
-        httpd_resp_send_400(req);
+        httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Content is empty");
         return ESP_FAIL;
     }
     content[content_len] = '\0';
@@ -48,7 +48,7 @@ static esp_err_t discovery_handler(httpd_req_t *req) {
         }
     }
 
-    httpd_resp_send_400(req, "Invalid JSON", HTTPD_RESP_USE_STRLEN);
+    httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Invalid JSON");
     return ESP_FAIL;
 }
 
