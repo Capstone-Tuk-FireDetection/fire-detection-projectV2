@@ -1,4 +1,3 @@
-@@ -1,14 +1,18 @@
 #include "esp_camera.h"
 #include <WiFi.h>
 #include <HTTPClient.h> 
@@ -8,17 +7,20 @@
 
 #define FLAME_PIN 14 // Flame sensor 핀
 
-
-
-
 volatile bool allowStreaming = true;
 int cachedFlame = -1;
 
-
 void sensorTask(void *param) {
   for (;;) {
+    allowStreaming = false;
+    delay(120);
 
-@@ -24,78 +28,18 @@ void sensorTask(void *param) {
+    cachedFlame = digitalRead(FLAME_PIN);
+
+    allowStreaming = true;
+    vTaskDelay(pdMS_TO_TICKS(3000));
+  }
+}
 
 #include "wifi_config.h"
 
@@ -55,10 +57,10 @@ void setup() {
   config.pin_reset = RESET_GPIO_NUM;
   config.xclk_freq_hz = 20000000;
   config.frame_size = FRAMESIZE_QQVGA;
-  config.pixel_format = PIXFORMAT_YUV422;
+  config.pixel_format = PIXFORMAT_JPEG;
   config.fb_location = CAMERA_FB_IN_PSRAM;
-  config.jpeg_quality = 12;
-  config.fb_count = 2;
+  config.jpeg_quality = 14;
+  config.fb_count = 1;
   config.grab_mode = CAMERA_GRAB_LATEST;
 
   if (esp_camera_init(&config) != ESP_OK) {
