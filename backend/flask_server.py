@@ -8,12 +8,15 @@ import threading
 import socket
 import ipaddress
 import time
+import os
 
 app = Flask(__name__)
 CORS(app, resources={r"/*": {"origins": "*"}}, supports_credentials=True)
 
-# ✅ Firebase 초기화 (Firestore 사용)
-cred = credentials.Certificate("./firebase-adminsdk.json")
+# ✅ Firebase 초기화 (절대 경로 사용으로 수정)
+script_dir = os.path.dirname(os.path.abspath(__file__))
+json_path = os.path.join(script_dir, "firebase-adminsdk.json")
+cred = credentials.Certificate(json_path)
 firebase_admin.initialize_app(cred)
 db = firestore.client()
 
