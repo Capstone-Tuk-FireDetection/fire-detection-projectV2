@@ -289,7 +289,7 @@ def snapshot_device(device):
 
     try:
         # ESP32-CAM의 캡처 엔드포인트로 요청
-        r = requests.get(f"http://{ip}/capture", timeout=5, stream=True)
+        r = requests.get(f"http://{ip}/jpg", timeout=5, stream=True)
         
         # ESP32-CAM으로부터 받은 응답 헤더를 그대로 클라이언트에 전달
         headers = [(name, value) for (name, value) in r.raw.headers.items()]

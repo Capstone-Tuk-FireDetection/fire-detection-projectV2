@@ -5,7 +5,7 @@
 #define CAMERA_MODEL_AI_THINKER
 #include "camera_pins.h"
 
-#define FLAME_PIN 14 // Flame sensor 핀
+#define FLAME_PIN 33 // Flame sensor 핀
 
 volatile bool allowStreaming = true;
 int cachedFlame = -1;
