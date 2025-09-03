@@ -2,7 +2,6 @@
 import 'package:flutter/material.dart';
 import 'api_service.dart';
 
-
 class VideoPage extends StatefulWidget {
   const VideoPage({super.key});
   @override
@@ -10,7 +9,9 @@ class VideoPage extends StatefulWidget {
 }
 
 class _VideoPageState extends State<VideoPage> {
-  late Future<Map<String, String>> _devicesF;
+  // ★ Map<String, String> → Map<String, dynamic> 로 변경
+  late Future<Map<String, dynamic>> _devicesF; // ★
+
   String? _selected;
 
   // 스냅샷 URL과 이미지 로딩 상태를 관리
@@ -23,7 +24,7 @@ class _VideoPageState extends State<VideoPage> {
   @override
   void initState() {
     super.initState();
-    _devicesF = ApiService.fetchDevices();
+    _devicesF = ApiService.fetchDevices(); // ★ 반환 타입과 일치
   }
 
   // 이미지 새로고침 함수
@@ -31,16 +32,16 @@ class _VideoPageState extends State<VideoPage> {
     if (_selected == null) return;
     setState(() {
       _isLoading = true;
-      // 타임스탬프 대신 간단한 버전 번호를 추가하여 URL 변경
       _imageVersion++;
       _snapshotUrl = '${ApiService.snapshotUrl(_selected)}?v=$_imageVersion';
-      _flameF = ApiService.fetchFlame();
+      _flameF = ApiService.fetchFlame(); // (참고) 여러 디바이스면 ApiService에 파라미터 추가 권장
     });
   }
 
   @override
   Widget build(BuildContext context) {
-    return FutureBuilder<Map<String, String>>(
+    // ★ FutureBuilder 제네릭도 Map<String, dynamic> 로 변경
+    return FutureBuilder<Map<String, dynamic>>( // ★
       future: _devicesF,
       builder: (ctx, snap) {
         if (snap.connectionState != ConnectionState.done) {
@@ -50,8 +51,43 @@ class _VideoPageState extends State<VideoPage> {
           return Center(child: Text('장치가 없습니다: ${snap.error ?? ''}'));
         }
 
-        final devices = snap.data!.keys.toList()..sort();
-        _selected ??= devices.first;
+        // ★ /devices 응답에서 온라인 장치만 추출
+        final Map<String, dynamic> all = snap.data!;
+        final devices = all.entries
+            .where((e) {
+              final m = (e.value as Map<String, dynamic>? ?? {});
+              final status = (m['status'] ?? '').toString().toLowerCase();
+              return status == 'online';
+            })
+            .map((e) => e.key)
+            .toList()
+          ..sort();
+
+        // ★ 선택된 장치가 오프라인으로 바뀐 경우 보정
+        if (_selected == null || !devices.contains(_selected)) {
+          _selected = devices.isNotEmpty ? devices.first : null;
+          // 선택이 사라졌으니 스냅샷/불꽃 상태 초기화
+          _snapshotUrl = null;
+          _flameF = null;
+        }
+
+        // 온라인 장치가 하나도 없을 때
+        if (_selected == null) {
+          return Column(
+            children: [
+              const SizedBox(height: 16),
+              const Text('현재 온라인인 장치가 없습니다.'),
+              const SizedBox(height: 8),
+              TextButton.icon(
+                onPressed: () {
+                  setState(() => _devicesF = ApiService.fetchDevices());
+                },
+                icon: const Icon(Icons.refresh),
+                label: const Text('새로고침'),
+              ),
+            ],
+          );
+        }
 
         return Column(
           children: [
@@ -96,7 +132,6 @@ class _VideoPageState extends State<VideoPage> {
                       fit: BoxFit.contain,
                       loadingBuilder: (context, child, progress) {
                         if (progress == null) {
-                          // 로딩 완료 후 _isLoading 상태 업데이트
                           WidgetsBinding.instance.addPostFrameCallback((_) {
                             if (mounted && _isLoading) {
                               setState(() => _isLoading = false);
@@ -107,7 +142,6 @@ class _VideoPageState extends State<VideoPage> {
                         return const Center(child: CircularProgressIndicator());
                       },
                       errorBuilder: (context, error, stackTrace) {
-                        // 에러 발생 시 _isLoading 상태 업데이트
                         WidgetsBinding.instance.addPostFrameCallback((_) {
                           if (mounted && _isLoading) {
                             setState(() => _isLoading = false);
@@ -125,7 +159,7 @@ class _VideoPageState extends State<VideoPage> {
                 builder: (ctx, fSnap) {
                   final txt = fSnap.connectionState != ConnectionState.done
                       ? '불꽃 상태 확인 중...'
-                      : (fSnap.data == 0 ? '🔥 불꽃 감지!' : '정상');
+                      : (fSnap.data == 0 ? '🔥 불꽃 감지!' : '정상'); // ★
                   return Padding(
                     padding: const EdgeInsets.all(8),
                     child: Text(txt, style: const TextStyle(fontSize: 18)),

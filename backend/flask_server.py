@@ -9,6 +9,8 @@ import socket
 import ipaddress
 import time
 import os
+# ★ 추가
+from datetime import datetime, timezone
 
 app = Flask(__name__)
 CORS(app, resources={r"/*": {"origins": "*"}}, supports_credentials=True)
@@ -23,6 +25,10 @@ db = firestore.client()
 # ✅ 메모리 저장소 (스트리밍 클라이언트 상태만 남김)
 active_stream_clients = {}
 lock = threading.Lock()
+
+# ★ 추가: 온라인 판정 TTL(초). TTL 초 동안 하트비트 없으면 offline 처리
+ONLINE_TTL_SEC = 45
+
 
 # --- 🔽 [추가] 네트워크 탐색 기능 🔽 ---
 
@@ -89,8 +95,6 @@ def rescan_devices():
 # ✅ FCM 알림 함수 (Firestore 연동으로 수정)
 def send_fcm_notification_to_all(title, body):
     tokens_to_delete = []
-    
-    # Firestore에서 모든 FCM 토큰 문서를 가져옴
     docs = db.collection('fcm_tokens').stream()
 
     for doc in docs:
@@ -108,12 +112,12 @@ def send_fcm_notification_to_all(title, body):
         except Exception as e:
             print(f"❌ FCM 전송 실패: {token[:16]}... → {e}")
 
-    # Firestore에서 유효하지 않은 토큰들 삭제
     if tokens_to_delete:
         print(f"--- 유효하지 않은 FCM 토큰 {len(tokens_to_delete)}개 삭제 시작 ---")
         for token in tokens_to_delete:
             db.collection('fcm_tokens').document(token).delete()
         print("--- 토큰 삭제 완료 ---")
+
 
 # ✅ Firebase 인증 데코레이터
 def firebase_required(f):
@@ -131,6 +135,7 @@ def firebase_required(f):
         return f(*args, **kwargs)
     return decorated
 
+
 # ✅ FCM 토큰 등록 (Firestore 연동으로 수정)
 @app.route("/register_token", methods=["POST"])
 def register_fcm_token():
@@ -139,7 +144,6 @@ def register_fcm_token():
     if not token:
         return jsonify({"error": "FCM token required"}), 400
 
-    # 토큰을 문서 ID로 사용하여 Firestore에 저장 (중복 방지)
     doc_ref = db.collection('fcm_tokens').document(token)
     doc_ref.set({
         'timestamp': firestore.SERVER_TIMESTAMP
@@ -147,6 +151,7 @@ def register_fcm_token():
     
     print(f"🔔 Firestore에 FCM 토큰 등록: {token[:16]}...")
     return jsonify({"status": "token registered in Firestore"})
+
 
 # ✅ 디바이스 등록 (Firestore 사용)
 @app.route("/register", methods=["POST"])
@@ -158,14 +163,16 @@ def register():
         return jsonify({"error": "Invalid payload"}), 400
 
     doc_ref = db.collection('devices').document(name)
+    # ★ 등록 즉시 online + last_seen 기록
     doc_ref.set({
         'ip': ip,
-        'status': 'offline'
-    })
+        'status': 'online',
+        'last_seen': firestore.SERVER_TIMESTAMP
+    }, merge=True)
+
     print(f"✅ Device Registered: {name} at {ip}")
     return jsonify({"status": "ok", "device_name": name, "device_ip": ip})
 
-# ... (이하 다른 API 핸들러들은 변경 없음) ...
 
 # ✅ 디바이스 상태 업데이트 (Firestore 사용)
 @app.route("/device_status", methods=["POST"])
@@ -177,16 +184,84 @@ def device_status():
         return jsonify({"error": "Invalid payload"}), 400
 
     doc_ref = db.collection('devices').document(device_name)
-    doc_ref.update({'status': status})
+    # ★ status 수동 업데이트 시 last_seen도 갱신(online일 경우)
+    upd = {'status': status}
+    if status == 'online':
+        upd['last_seen'] = firestore.SERVER_TIMESTAMP
+    doc_ref.update(upd)
+
     print(f"✅ DB 상태 업데이트: {device_name} is {status}")
     return jsonify({"status": "ok"})
 
-# ✅ 디바이스 목록 조회 (Firestore 사용)
+
+# ★ 추가: 하트비트 수신
+@app.route("/heartbeat", methods=["POST"])
+def heartbeat():
+    data = request.get_json() or {}
+    name = data.get("device_name")
+    ip = data.get("ip")
+    if not name:
+        return jsonify({"error": "device_name required"}), 400
+
+    upd = {
+        'status': 'online',
+        'last_seen': firestore.SERVER_TIMESTAMP
+    }
+    if ip:
+        upd['ip'] = ip
+
+    db.collection('devices').document(name).set(upd, merge=True)
+    # print(f"💓 heartbeat: {name} ({ip})")
+    return jsonify({"status": "ok"})
+
+
+# ★ 추가: Firestore Timestamp -> timezone-aware datetime
+def _to_dt(ts):
+    try:
+        if hasattr(ts, "to_datetime"):
+            return ts.to_datetime()
+        return ts
+    except Exception:
+        return None
+
+def poke_known_devices_loop(interval_sec=10):  # ★ 추가
+    """Firestore에 등록된 장치 IP들에만 /discovery를 주기적으로 보내서
+    재부팅 후에도 하트비트가 재개되도록 보장."""
+    while True:
+        try:
+            server_ip = get_local_ip()
+            docs = db.collection('devices').stream()
+            for d in docs:
+                info = d.to_dict() or {}
+                ip = info.get('ip')
+                if not ip:
+                    continue
+                # 기존 probe_device 재사용
+                probe_device(ip, server_ip)
+        except Exception as e:
+            print("⚠️ poke_known_devices_loop error:", e)
+        time.sleep(interval_sec)
+
+# ✅ 디바이스 목록 조회 (Firestore 사용)  — last_seen 기반 온라인 판정 적용
 @app.route("/devices")
 def list_devices():
-    docs = db.collection('devices').stream()
-    devices = {doc.id: doc.to_dict() for doc in docs}
-    return jsonify(devices if devices else {})
+    now = datetime.now(timezone.utc)
+    out = {}
+    for doc in db.collection('devices').stream():
+        d = doc.to_dict() or {}
+        last_seen = _to_dt(d.get('last_seen'))
+        is_online = False
+        if last_seen:
+            is_online = (now - last_seen).total_seconds() <= ONLINE_TTL_SEC
+        out[doc.id] = {
+            "ip": d.get("ip"),
+            "status": "online" if is_online else "offline",
+            "last_seen": last_seen.isoformat() if last_seen else None,
+            "last_offline_at": (_to_dt(d.get("last_offline_at")).isoformat()
+                                if d.get("last_offline_at") else None)
+        }
+    return jsonify(out if out else {})
+
 
 # ✅ 사용자 디바이스 등록 (Firestore 사용)
 @app.route("/user/devices", methods=["POST"])
@@ -208,6 +283,7 @@ def register_user_device():
     ref.set({'ip': ip})
     return jsonify({"status": "registered", "device_name": device_name})
 
+
 # ✅ 사용자 디바이스 목록 (Firestore 사용)
 @app.route("/user/devices", methods=["GET"])
 @firebase_required
@@ -215,6 +291,7 @@ def get_user_devices():
     docs = db.collection('users').document(request.uid).collection('devices').stream()
     user_devices = {doc.id: doc.to_dict() for doc in docs}
     return jsonify(user_devices if user_devices else {})
+
 
 # ✅ 사용자 디바이스 삭제 (Firestore 사용)
 @app.route("/user/devices/<device_name>", methods=["DELETE"])
@@ -226,13 +303,12 @@ def delete_user_device(device_name):
         return jsonify({"status": "deleted", "device_name": device_name})
     return jsonify({"error": "Device not found"}), 404
 
-# ✅ flame 상태 조회 (Firestore 사용)
+
 @app.route("/flame/<device>")
 def get_flame_by_name(device):
     doc = db.collection('devices').document(device).get()
     if not doc.exists:
         return jsonify({"flame": -1, "error": "Device not found"}), 404
-    
     device_info = doc.to_dict()
     ip = device_info.get('ip')
     if not ip:
@@ -240,16 +316,23 @@ def get_flame_by_name(device):
 
     try:
         resp = requests.get(f"http://{ip}/flame", timeout=2)
-        return jsonify(resp.json())
+        data = resp.json()
+        # ★ 성공적으로 응답 받으면 online 판정으로 즉시 갱신
+        db.collection('devices').document(device).update({
+            'last_seen': firestore.SERVER_TIMESTAMP,
+            'status': 'online'
+        })
+        return jsonify(data)
     except requests.RequestException as e:
         return jsonify({"flame": -1, "error": str(e)}), 503
+
+
 
 @app.route("/stream/<device>")
 def stream_device(device):
     doc = db.collection('devices').document(device).get()
     if not doc.exists:
         return Response("Device not found", status=404)
-    
     device_info = doc.to_dict()
     ip = device_info.get('ip')
     if not ip:
@@ -262,6 +345,11 @@ def stream_device(device):
 
     def generate():
         try:
+            # ★ 스트림 연결 성공 == 온라인
+            db.collection('devices').document(device).update({
+                'last_seen': firestore.SERVER_TIMESTAMP,
+                'status': 'online'
+            })
             r = requests.get(f"http://{ip}/stream", stream=True, timeout=5)
             for chunk in r.iter_content(chunk_size=1024):
                 yield chunk
@@ -275,31 +363,32 @@ def stream_device(device):
     return Response(stream_with_context(generate()),
                     content_type="multipart/x-mixed-replace; boundary=frame")
 
+
+
 # ✅ 스냅샷 API
 @app.route("/snapshot/<device>")
 def snapshot_device(device):
     doc = db.collection('devices').document(device).get()
     if not doc.exists:
         return Response("Device not found", status=404)
-    
     device_info = doc.to_dict()
     ip = device_info.get('ip')
     if not ip:
         return Response("Device IP not found", status=404)
 
     try:
-        # ESP32-CAM의 캡처 엔드포인트로 요청
         r = requests.get(f"http://{ip}/jpg", timeout=5, stream=True)
-        
-        # ESP32-CAM으로부터 받은 응답 헤더를 그대로 클라이언트에 전달
+        # ★ 성공하면 last_seen/status 갱신
+        db.collection('devices').document(device).update({
+            'last_seen': firestore.SERVER_TIMESTAMP,
+            'status': 'online'
+        })
         headers = [(name, value) for (name, value) in r.raw.headers.items()]
-        
-        # 이미지 데이터를 Response 객체로 감싸서 반환
         return Response(r.content, r.status_code, headers)
-    
     except requests.RequestException as e:
         print(f"❌ 스냅샷 오류({device}):", e)
         return Response(f"Failed to get snapshot from {device}", status=503)
+
 
 # ✅ 알림 수신 API
 @app.route("/alert", methods=["POST"])
@@ -311,12 +400,35 @@ def alert():
         send_fcm_notification_to_all("불꽃 감지", f"🔥 {device} 장치에서 불꽃이 감지되었습니다.")
     return jsonify({"received": True})
 
+
+# ★ 추가: 오래된(last_seen) 장치 offline 스윕
+def offline_sweeper():
+    while True:
+        try:
+            now = datetime.now(timezone.utc)
+            for doc in db.collection('devices').stream():
+                d = doc.to_dict() or {}
+                last_seen = _to_dt(d.get('last_seen'))
+                if not last_seen:
+                    continue
+                age = (now - last_seen).total_seconds()
+                if age > ONLINE_TTL_SEC and d.get('status') != 'offline':
+                    doc.reference.update({
+                        'status': 'offline',
+                        'last_offline_at': firestore.SERVER_TIMESTAMP
+                    })
+        except Exception as e:
+            print("⚠️ offline_sweeper error:", e)
+        time.sleep(15)  # 15초 간격 확인
+
+
 if __name__ == '__main__':
     server_ip = get_local_ip()
     print(f"🔥 Flask 서버를 IP {server_ip}에서 시작합니다.")
-    
-    scanner_thread = threading.Thread(target=network_scanner, args=(server_ip,))
-    scanner_thread.daemon = True
-    scanner_thread.start()
+
+    threading.Thread(target=network_scanner, args=(server_ip,), daemon=True).start()
+    threading.Thread(target=offline_sweeper, daemon=True).start()
+    threading.Thread(target=poke_known_devices_loop, daemon=True).start()  # ★ 추가
 
     app.run(host="0.0.0.0", port=8080, debug=True, use_reloader=False)
+
