@@ -85,7 +85,7 @@ class _FireCamAppState extends State<FireCamApp> {
         ),
         duration: const Duration(seconds: 5),
         behavior: SnackBarBehavior.floating,
-        backgroundColor: Colors.redAccent,
+        backgroundColor: const Color.fromARGB(255, 68, 0, 255),
       );
 
       scaffoldMessengerKey.currentState?.showSnackBar(snackBar);
@@ -103,7 +103,7 @@ class _FireCamAppState extends State<FireCamApp> {
       title: 'Smart FireCam',
       scaffoldMessengerKey: scaffoldMessengerKey, // ✅ 여기 중요!
       theme: ThemeData(
-        colorSchemeSeed: Colors.deepOrange,
+        colorSchemeSeed: const Color.fromARGB(255, 81, 0, 255),
         useMaterial3: true,
       ),
       home: StreamBuilder<User?>(
