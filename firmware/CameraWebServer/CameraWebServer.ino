@@ -78,7 +78,7 @@ void setup() {
 
   startCameraServer();
   xTaskCreatePinnedToCore(sensorTask, "Sensor Task", 2048, NULL, 1, NULL, 1);
-  registerDevice();      
+  // registerDevice();      
   Serial.print("Camera Ready! Open http://");
   Serial.print(WiFi.localIP());
   Serial.println(" or http://espcam1.local to connect");
