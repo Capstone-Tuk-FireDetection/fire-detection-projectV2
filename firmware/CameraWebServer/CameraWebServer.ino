@@ -28,7 +28,6 @@ const char *ssid = WIFI_SSID;
 const char *password = WIFI_PASSWORD;
 
 void startCameraServer();
-void setupLedFlash(int pin);
 
 void setup() {
   Serial.begin(115200);
@@ -78,22 +77,10 @@ void setup() {
 
   startCameraServer();
   xTaskCreatePinnedToCore(sensorTask, "Sensor Task", 2048, NULL, 1, NULL, 1);
-  // registerDevice();      
+  
   Serial.print("Camera Ready! Open http://");
   Serial.print(WiFi.localIP());
-  Serial.println(" or http://espcam1.local to connect");
-  
-}
-void registerDevice() {
-  HTTPClient http;
-  // Flask 서버 IP:포트로 수정 (예: 192.168.0.10)
-  http.begin("http://192.168.206.187/register");
-  http.addHeader("Content-Type", "application/json");
-
-  String payload = "{\"device_name\":\"espcam1\","
-                   "\"ip\":\"" + WiFi.localIP().toString() + "\"}";
-  http.POST(payload);
-  http.end();
+  Serial.println(" to connect");
 }
 
 void loop() {

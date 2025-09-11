@@ -1,5 +1,5 @@
+// wifi_config.h
 #pragma once
 
-// Replace these with your WiFi credentials
-#define WIFI_SSID      "A"
-#define WIFI_PASSWORD  "1234qwer"
+#define WIFI_SSID "YOUR_WIFI_SSID"         // <-- 여기에 와이파이 SSID를 입력하세요
+#define WIFI_PASSWORD "YOUR_WIFI_PASSWORD" // <-- 여기에 와이파이 비밀번호를 입력하세요
