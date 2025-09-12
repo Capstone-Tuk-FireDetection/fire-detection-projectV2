@@ -10,11 +10,17 @@
 // 공유 변수
 volatile bool allowStreaming = true;
 int cachedFlame = -1;
+int lastFlameState = -1; // Variable to store the last flame state
 
 // 센서 값을 주기적으로 읽는 태스크
 void sensorTask(void *param) {
   for (;;) {
-    cachedFlame = digitalRead(FLAME_PIN);
+    int currentFlame = digitalRead(FLAME_PIN);
+    if (currentFlame != lastFlameState) {
+      Serial.printf("🔥 Flame state changed to: %d\n", currentFlame);
+      lastFlameState = currentFlame;
+    }
+    cachedFlame = currentFlame;
     vTaskDelay(pdMS_TO_TICKS(200));
   }
 }
