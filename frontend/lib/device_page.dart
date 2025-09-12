@@ -1,6 +1,6 @@
-  import 'dart:async';
-  import 'package:flutter/material.dart';
-  import 'api_service.dart';
+import 'dart:async';
+import 'package:flutter/material.dart';
+import 'api_service.dart';
 
   class DevicePage extends StatefulWidget {
     const DevicePage({super.key});
@@ -9,13 +9,11 @@
     State<DevicePage> createState() => _DevicePageState();
   }
 
-
   class _DevicePageState extends State<DevicePage> {
     late Future<Map<String, dynamic>> _future;
 
     // 최근 끊김 표시용(서버의 last_offline_at 우선, 없으면 최초 감지시각 기록)
     final Map<String, DateTime> _offlineAt = <String, DateTime>{};
-
 
     Timer? _pollTimer;
     Timer? _clockTimer;
@@ -23,11 +21,9 @@
     static const _pollInterval = Duration(seconds: 20);
     static const _aiStatusPollInterval = Duration(seconds: 5); // Added
 
-
     String _aiStreamStatus = '확인 중...'; // Added
     bool _isAiStreamRunning = false; // Added
     bool _isAiActionPending = false; // Added
-
 
     @override
     void initState() {
@@ -52,14 +48,12 @@
       _pollTimer = Timer.periodic(_pollInterval, (_) => _refreshDevices());
     }
 
-
     void _startClock() {
       _clockTimer?.cancel();
       clockTimer = Timer.periodic(const Duration(minutes: 1), () {
         if (mounted && _offlineAt.isNotEmpty) setState(() {});
       });
     }
-
 
     DateTime? _parseIso(String? s) {
       if (s == null || s.isEmpty) return null;
@@ -75,16 +69,14 @@
         final devices = await ApiService.fetchDevices();
         if (!mounted) return;
 
-
         // 서버 status/last_offline_at 기반으로 최근 끊김 갱신
         final now = DateTime.now();
         for (final entry in devices.entries) {
           final name = entry.key;
-          final info = entry.value as Map<String, dynamic>? ?? {};
+          final info = (entry.value as Map<String, dynamic>? ?? {});
           final status = (info['status'] ?? '').toString().toLowerCase();
           final lastOffIso = info['last_offline_at'] as String?;
           final lastOff = _parseIso(lastOffIso);
-
 
           if (status == 'offline') {
             _offlineAt[name] = lastOff ?? _offlineAt[name] ?? now;
@@ -92,7 +84,6 @@
             _offlineAt.remove(name); // 온라인이면 최근 끊김 목록에서 제거
           }
         }
-
 
         setState(() {
           _future = Future.value(devices);
@@ -106,12 +97,10 @@
       }
     }
 
-
     void _startAiStatusPolling() {
       _aiStatusTimer?.cancel();
       _aiStatusTimer = Timer.periodic(_aiStatusPollInterval, (_) => _checkAiStreamStatus());
     }
-
 
     Future<void> _checkAiStreamStatus() async {
       try {
@@ -134,12 +123,10 @@
     Future<void> _toggleAiStream() async {
       if (_isAiActionPending) return; // Prevent multiple clicks
 
-
       setState(() {
         _isAiActionPending = true;
         _aiStreamStatus = _isAiStreamRunning ? '중지 중...' : '시작 중...';
       });
-
 
       try {
         if (_isAiStreamRunning) {
@@ -167,7 +154,6 @@
       }
     }
 
-
     String _timeAgo(DateTime when) {
       final diff = DateTime.now().difference(when);
       if (diff.inMinutes < 1) return '방금 전';
@@ -176,7 +162,6 @@
       if (m == 0) return '${h}시간 전';
       return '${h}시간 ${m}분 전';
     }
-
 
     @override
     Widget build(BuildContext context) {
@@ -207,7 +192,6 @@
 
             final devices = snap.data ?? const <String, dynamic>{};
 
-
             // online / offline 분리
             final online = <MapEntry<String, Map<String, dynamic>>>[];
             for (final e in devices.entries) {
@@ -218,10 +202,8 @@
               }
             }
 
-
             final offlineList = _offlineAt.entries.toList()
               ..sort((a, b) => (b.value).compareTo(a.value)); // 최근 끊김 우선
-
 
             return ListView(
               padding: const EdgeInsets.all(16),
@@ -258,7 +240,6 @@
                 ),
 
                 const SizedBox(height: 16),
-
 
                 // ===== 온라인 기기 =====
                 Card(
@@ -305,7 +286,6 @@
 
                 const SizedBox(height: 16),
 
-
                 // ===== 최근 끊긴 장치 =====
                 Card(
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
@@ -342,7 +322,6 @@
                     ),
                   ),
                 ),
-
 
                 const SizedBox(height: 8),
                 Center(
