@@ -5,7 +5,7 @@
 #include "board_config.h"
 #include "wifi_config.h"
 
-#define FLAME_PIN 33 // Flame sensor 핀
+#define FLAME_PIN 14 // Flame sensor 핀
 
 // 공유 변수
 volatile bool allowStreaming = true;
@@ -14,13 +14,8 @@ int cachedFlame = -1;
 // 센서 값을 주기적으로 읽는 태스크
 void sensorTask(void *param) {
   for (;;) {
-    allowStreaming = false; // 스트리밍 잠시 중단 플래그
-    vTaskDelay(pdMS_TO_TICKS(120)); // 잠시 대기
-
     cachedFlame = digitalRead(FLAME_PIN);
-
-    allowStreaming = true; // 스트리밍 재개 플래그
-    vTaskDelay(pdMS_TO_TICKS(3000)); // 3초 대기
+    vTaskDelay(pdMS_TO_TICKS(200));
   }
 }
 
@@ -124,8 +119,8 @@ void setup() {
 
   startCameraServer();
   
-  // Start the sensor task
-  xTaskCreatePinnedToCore(sensorTask, "Sensor Task", 2048, NULL, 1, NULL, 1);
+  // Start the sensor task on Core 0
+  xTaskCreatePinnedToCore(sensorTask, "Sensor Task", 2048, NULL, 1, NULL, 0);
 
   Serial.print("Camera Ready! Use 'http://");
   Serial.print(WiFi.localIP());

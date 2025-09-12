@@ -231,7 +231,7 @@ def _to_dt(ts):
     except Exception:
         return None
 
-def poke_known_devices_loop(interval_sec=10):  # ★ 추가
+def poke_known_devices_loop(interval_sec=100):  # ★ 추가
     """Firestore에 등록된 장치 IP들에만 /discovery를 주기적으로 보내서
     재부팅 후에도 하트비트가 재개되도록 보장."""
     while True:
@@ -441,7 +441,12 @@ def start_ai_stream():
         # Using preexec_fn=os.setsid on Unix-like systems to detach,
         # but for Windows, it's more complex. For simplicity, let it run
         # as a child process of Flask.
-        ai_process = subprocess.Popen(command)
+        # On Windows, open in a new console window to show logs.
+        popen_kwargs = {}
+        if sys.platform == "win32":
+            popen_kwargs['creationflags'] = subprocess.CREATE_NEW_CONSOLE
+        
+        ai_process = subprocess.Popen(command, **popen_kwargs)
         print(f"✅ AI stream started with PID: {ai_process.pid}")
         return jsonify({"status": "AI stream started", "pid": ai_process.pid}), 200
     except Exception as e:

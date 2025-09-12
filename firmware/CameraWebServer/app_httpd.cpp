@@ -357,7 +357,7 @@ static esp_err_t stream_handler(httpd_req_t *req) {
       _timestamp.tv_sec = fb->timestamp.tv_sec;
       _timestamp.tv_usec = fb->timestamp.tv_usec;
       if (fb->format != PIXFORMAT_JPEG) {
-        bool jpeg_converted = frame2jpg(fb, 80, &(_jpg_buf), &(_jpg_buf_len));
+        bool jpeg_converted = frame2jpg(fb, 50, &(_jpg_buf), &(_jpg_buf_len));
         esp_camera_fb_return(fb);
         fb = NULL;
         if (!jpeg_converted) {

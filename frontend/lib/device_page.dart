@@ -131,12 +131,14 @@ class _DevicePageState extends State<DevicePage> {
     try {
       if (_isAiStreamRunning) {
         await ApiService.stopAiStream();
+        _aiStatusTimer?.cancel(); // ★ 스트림 중지 시 상태 폴링 중단
         if (!mounted) return; // Guard
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('AI 스트림을 중지했습니다.')),
         );
       } else {
         await ApiService.startAiStream();
+        _startAiStatusPolling(); // ★ 스트림 시작 시 상태 폴링 재개
         if (!mounted) return; // Guard
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('AI 스트림을 시작했습니다.')),
