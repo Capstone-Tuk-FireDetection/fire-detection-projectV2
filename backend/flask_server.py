@@ -235,6 +235,12 @@ def poke_known_devices_loop(interval_sec=100):  # ★ 추가
     """Firestore에 등록된 장치 IP들에만 /discovery를 주기적으로 보내서
     재부팅 후에도 하트비트가 재개되도록 보장."""
     while True:
+        global ai_process
+        if ai_process and ai_process.poll() is None:
+            # AI 스트림이 실행 중일 때는 장치 탐색을 일시 중지합니다.
+            time.sleep(interval_sec)
+            continue
+
         try:
             server_ip = get_local_ip()
             docs = db.collection('devices').stream()

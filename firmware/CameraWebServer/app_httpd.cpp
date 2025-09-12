@@ -37,7 +37,7 @@ extern volatile bool allowStreaming;
 //--- Server Communication ---//
 static String g_serverIp = "";
 static const char* DEVICE_NAME = "espcam1";
-static const uint32_t HEARTBEAT_MS = 10000;
+static const uint32_t HEARTBEAT_MS = 30000;
 
 // AI stream activity tracking
 static int64_t last_jpg_request_time = 0;
