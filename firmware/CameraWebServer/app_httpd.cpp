@@ -730,6 +730,7 @@ static esp_err_t flame_handler(httpd_req_t *req) {
 
 // --- CUSTOM: Add /discovery handler ---
 static esp_err_t discovery_handler(httpd_req_t *req) {
+  Serial.println("Discovery request received!"); // Log when a discovery request is received
   int total = req->content_len;
   if (total <= 0) {
     httpd_resp_set_type(req, "application/json");

@@ -49,8 +49,11 @@ def probe_device(ip, server_ip):
         payload = {"server_ip": server_ip}
         requests.post(url, json=payload, timeout=0.5)
         print(f"📡 Discovery: {ip}에 탐색 신호 전송 완료.")
-    except requests.RequestException:
-        pass
+    except requests.exceptions.RequestException as e:
+        # Log connection errors, but only common ones to avoid spamming
+        if isinstance(e, (requests.exceptions.ConnectionError, requests.exceptions.Timeout)):
+            # print(f"- Discovery: Failed to connect to {ip}") # Optional: for very verbose logging
+            pass
     except Exception as e:
         print(f"❌ Discovery: {ip} 탐색 중 오류: {e}")
 
