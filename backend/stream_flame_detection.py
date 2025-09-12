@@ -6,6 +6,7 @@ import torch
 import torch.nn as nn
 from torchvision import transforms
 import time
+import os
 
 # 🔥 AI 모델 정의
 class FlameClassifier(nn.Module):
@@ -66,7 +67,9 @@ def run_inference(device_name, server_url):
 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     model = FlameClassifier().to(device)
-    model.load_state_dict(torch.load('./flame_cnn.pth', map_location=device))
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    model_path = os.path.join(script_dir, 'flame_cnn.pth')
+    model.load_state_dict(torch.load(model_path, map_location=device))
     model.eval()
 
     transform = transforms.Compose([
