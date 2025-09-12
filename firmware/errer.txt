@@ -1,3 +1,26 @@
- ✅ Service worker 등록 성공 ServiceWorkerRegistration
- This app is linked to the debug service: ws://127.0.0.1:53055/EFqKUsTAuEQ=/ws
-:8080/snapshot/espcam1?v=1:1  Failed to load resource: the server responded with a status of 404 (NOT FOUND)
+192.168.51.90 - - [12/Sep/2025 12:37:33] "POST /heartbeat HTTP/1.1" 200 -
+127.0.0.1 - - [12/Sep/2025 12:37:35] "GET /devices HTTP/1.1" 200 -
+127.0.0.1 - - [12/Sep/2025 12:37:38] "GET /devices HTTP/1.1" 200 -
+-> Received /snapshot request for device: espcam1
+  - Found device 'espcam1' in Firestore with IP: 192.168.51.90
+  - Attempting to get snapshot from http://192.168.51.90/jpg
+  - Snapshot request to ESP32 returned status: 404
+127.0.0.1 - - [12/Sep/2025 12:37:40] "GET /snapshot/espcam1?v=1 HTTP/1.1" 404 -
+127.0.0.1 - - [12/Sep/2025 12:37:40] "GET /flame/espcam1 HTTP/1.1" 200 -
+127.0.0.1 - - [12/Sep/2025 12:37:42] "OPTIONS /register_token HTTP/1.1" 200 -
+🔔 Firestore에 FCM 토큰 등록: fVIuD4egWayY1CMR...
+127.0.0.1 - - [12/Sep/2025 12:37:43] "POST /register_token HTTP/1.1" 200 -
+📡 Discovery: 192.168.51.90에 탐색 신호 전송 완료.
+192.168.51.90 - - [12/Sep/2025 12:37:43] "POST /heartbeat HTTP/1.1" 200 -
+📡 Discovery: 192.168.51.90에 탐색 신호 전송 완료.
+192.168.51.90 - - [12/Sep/2025 12:37:53] "POST /heartbeat HTTP/1.1" 200 -
+127.0.0.1 - - [12/Sep/2025 12:37:56] "GET /devices HTTP/1.1" 200 -
+127.0.0.1 - - [12/Sep/2025 12:37:58] "GET /devices HTTP/1.1" 200 -
+📡 Discovery: 192.168.51.90에 탐색 신호 전송 완료.
+192.168.51.90 - - [12/Sep/2025 12:38:04] "POST /heartbeat HTTP/1.1" 200 -
+📡 Discovery: 192.168.51.90에 탐색 신호 전송 완료.
+192.168.51.90 - - [12/Sep/2025 12:38:14] "POST /heartbeat HTTP/1.1" 200 -
+127.0.0.1 - - [12/Sep/2025 12:38:16] "GET /devices HTTP/1.1" 200 -
+📡 Discovery: 192.168.51.90에 탐색 신호 전송 완료.
+192.168.51.90 - - [12/Sep/2025 12:38:24] "POST /heartbeat HTTP/1.1" 200 -
+📡 Discovery: 192.168.51.90에 탐색 신호 전송 완료.
