@@ -2,30 +2,20 @@
 	"resource": "/C:/Users/C.C/OneDrive/문서/GitHub/temp/fire-detection-projectV2/frontend/lib/device_page.dart",
 	"owner": "_generated_diagnostic_collection_name_#1",
 	"code": {
-		"value": "duplicate_definition",
+		"value": "undefined_identifier",
 		"target": {
 			"$mid": 1,
-			"path": "/diagnostics/duplicate_definition",
+			"path": "/diagnostics/undefined_identifier",
 			"scheme": "https",
 			"authority": "dart.dev"
 		}
 	},
 	"severity": 8,
-	"message": "The name '_timeAgo' is already defined.\nTry renaming one of the declarations.",
+	"message": "Undefined name 'clockTimer'.\nTry correcting the name to one that is defined, or defining the name.",
 	"source": "dart",
-	"startLineNumber": 166,
-	"startColumn": 14,
-	"endLineNumber": 166,
-	"endColumn": 22,
-	"relatedInformation": [
-		{
-			"startLineNumber": 157,
-			"startColumn": 14,
-			"endLineNumber": 157,
-			"endColumn": 22,
-			"message": "The first definition of this name.",
-			"resource": "/C:/Users/C.C/OneDrive/문서/GitHub/temp/fire-detection-projectV2/frontend/lib/device_page.dart"
-		}
-	],
+	"startLineNumber": 58,
+	"startColumn": 7,
+	"endLineNumber": 58,
+	"endColumn": 17,
 	"origin": "extHost1"
 }]

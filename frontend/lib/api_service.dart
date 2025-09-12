@@ -67,4 +67,3 @@ class ApiService {
         throw Exception('Failed to get AI stream status: ${res.statusCode} ${res.body}');
       }
     }
-}
