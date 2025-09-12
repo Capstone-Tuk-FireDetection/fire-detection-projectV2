@@ -1,8 +1,1 @@
-PS C:\Users\C.C\OneDrive\문서\GitHub\temp\fire-detection-projectV2> curl -X POST -H "Content-Type: application/json" -d "{\"server_ip\":\"192.168.51.187\"}" http://192.168.51.90/discovery
-Invoke-WebRequest : 'Headers' 매개 변수를 바인딩할 수 없습니다. "System.String" 유형의 "Content-Type: application/json" 값을 "System.Collections.IDictionary" 유형으로 변환할 수
- 없습니다.
-위치 줄:1 문자:17
-+ curl -X POST -H "Content-Type: application/json" -d "{\"server_ip\":\ ...
-+                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-    + CategoryInfo          : InvalidArgument: (:) [Invoke-WebRequest], ParameterBindingException
-    + FullyQualifiedErrorId : CannotConvertArgumentNoMessage,Microsoft.PowerShell.Commands.InvokeWebRequestCommand
+127.0.0.1 - - [12/Sep/2025 11:45:02] "GET /snapshot/espcam1?v=3 HTTP/1.1" 404 -
