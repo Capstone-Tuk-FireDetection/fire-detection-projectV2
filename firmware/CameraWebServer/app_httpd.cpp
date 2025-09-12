@@ -20,10 +20,58 @@
 #include "sdkconfig.h"
 #include "camera_index.h"
 #include "board_config.h"
+#include "Arduino.h"
+#include <WiFi.h>
+#include <HTTPClient.h>
+#include <memory>
+
 
 #if defined(ARDUINO_ARCH_ESP32) && defined(CONFIG_ARDUHAL_ESP_LOG)
 #include "esp32-hal-log.h"
 #endif
+
+// CUSTOM: Add shared variables
+extern int cachedFlame;
+extern volatile bool allowStreaming;
+
+//--- Server Communication ---//
+static String g_serverIp = "";
+static const char* DEVICE_NAME = "espcam1";
+static const uint32_t HEARTBEAT_MS = 10000;
+
+static void post_json(const String& url, const String& json) {
+  if (!WiFi.isConnected()) return;
+  HTTPClient http;
+  if (!http.begin(url)) return;
+  http.addHeader("Content-Type", "application/json");
+  http.POST((uint8_t*)json.c_str(), json.length());
+  http.end();
+}
+
+static void send_register_once() {
+  if (g_serverIp.isEmpty()) return;
+  String url = "http://" + g_serverIp + ":8080/register";
+  String body = String("{\"device_name\":\"") + DEVICE_NAME + "\",\"ip\":\"" + WiFi.localIP().toString() + "\"}";
+  post_json(url, body);
+}
+
+static void send_heartbeat() {
+  if (g_serverIp.isEmpty()) return;
+  String url = "http://" + g_serverIp + ":8080/heartbeat";
+  String body = String("{\"device_name\":\"") + DEVICE_NAME + "\",\"ip\":\"" + WiFi.localIP().toString() + "\"}";
+  post_json(url, body);
+}
+
+static void heartbeat_task(void* pv) {
+  send_register_once();
+  for (;;)
+ {
+    send_heartbeat();
+    vTaskDelay(pdMS_TO_TICKS(HEARTBEAT_MS));
+  }
+}
+//--------------------------//
+
 
 // LED FLASH setup
 #if defined(LED_GPIO_NUM)
@@ -94,8 +142,6 @@ void enable_led(bool en) {  // Turn LED On or Off
     duty = CONFIG_LED_MAX_INTENSITY;
   }
   ledcWrite(LED_GPIO_NUM, duty);
-  //ledc_set_duty(CONFIG_LED_LEDC_SPEED_MODE, CONFIG_LED_LEDC_CHANNEL, duty);
-  //ledc_update_duty(CONFIG_LED_LEDC_SPEED_MODE, CONFIG_LED_LEDC_CHANNEL);
   log_i("Set LED intensity to %d", duty);
 }
 #endif
@@ -160,8 +206,8 @@ static esp_err_t capture_handler(httpd_req_t *req) {
 
 #if defined(LED_GPIO_NUM)
   enable_led(true);
-  vTaskDelay(150 / portTICK_PERIOD_MS);  // The LED needs to be turned on ~150ms before the call to esp_camera_fb_get()
-  fb = esp_camera_fb_get();              // or it won't be visible in the frame. A better way to do this is needed.
+  vTaskDelay(150 / portTICK_PERIOD_MS);
+  fb = esp_camera_fb_get();
   enable_led(false);
 #else
   fb = esp_camera_fb_get();
@@ -232,6 +278,12 @@ static esp_err_t stream_handler(httpd_req_t *req) {
 #endif
 
   while (true) {
+    // CUSTOM: Check if streaming is allowed by the sensor task
+    if (!allowStreaming) {
+      vTaskDelay(pdMS_TO_TICKS(100));
+      continue;
+    }
+
     fb = esp_camera_fb_get();
     if (!fb) {
       log_e("Camera capture failed");
@@ -240,7 +292,7 @@ static esp_err_t stream_handler(httpd_req_t *req) {
       _timestamp.tv_sec = fb->timestamp.tv_sec;
       _timestamp.tv_usec = fb->timestamp.tv_usec;
       if (fb->format != PIXFORMAT_JPEG) {
-        bool jpeg_converted = frame2jpg(fb, 80, &_jpg_buf, &_jpg_buf_len);
+        bool jpeg_converted = frame2jpg(fb, 80, &(_jpg_buf), &(_jpg_buf_len));
         esp_camera_fb_return(fb);
         fb = NULL;
         if (!jpeg_converted) {
@@ -628,7 +680,7 @@ static esp_err_t win_handler(httpd_req_t *req) {
   int offsetX = parse_get_var(buf, "offx", 0);
   int offsetY = parse_get_var(buf, "offy", 0);
   int totalX = parse_get_var(buf, "tx", 0);
-  int totalY = parse_get_var(buf, "ty", 0);  // codespell:ignore totaly
+  int totalY = parse_get_var(buf, "ty", 0);
   int outputX = parse_get_var(buf, "ox", 0);
   int outputY = parse_get_var(buf, "oy", 0);
   bool scale = parse_get_var(buf, "scale", 0) == 1;
@@ -637,10 +689,10 @@ static esp_err_t win_handler(httpd_req_t *req) {
 
   log_i(
     "Set Window: Start: %d %d, End: %d %d, Offset: %d %d, Total: %d %d, Output: %d %d, Scale: %u, Binning: %u", startX, startY, endX, endY, offsetX, offsetY,
-    totalX, totalY, outputX, outputY, scale, binning  // codespell:ignore totaly
+    totalX, totalY, outputX, outputY, scale, binning
   );
   sensor_t *s = esp_camera_sensor_get();
-  int res = s->set_res_raw(s, startX, startY, endX, endY, offsetX, offsetY, totalX, totalY, outputX, outputY, scale, binning);  // codespell:ignore totaly
+  int res = s->set_res_raw(s, startX, startY, endX, endY, offsetX, offsetY, totalX, totalY, outputX, outputY, scale, binning);
   if (res) {
     return httpd_resp_send_500(req);
   }
@@ -667,6 +719,54 @@ static esp_err_t index_handler(httpd_req_t *req) {
   }
 }
 
+// CUSTOM: Add flame sensor API handler
+static esp_err_t flame_handler(httpd_req_t *req) {
+  char buf[32];
+  snprintf(buf, sizeof(buf), "{\"flame\":%d}", cachedFlame);
+  httpd_resp_set_type(req, "application/json");
+  httpd_resp_set_hdr(req, "Access-Control-Allow-Origin", "*");
+  return httpd_resp_sendstr(req, buf);
+}
+
+// --- CUSTOM: Add /discovery handler ---
+static esp_err_t discovery_handler(httpd_req_t *req) {
+  int total = req->content_len;
+  if (total <= 0) {
+    httpd_resp_set_type(req, "application/json");
+    httpd_resp_sendstr(req, "{\"ok\":false,\"reason\":\"empty body\"}");
+    return ESP_OK;
+  }
+
+  std::unique_ptr<char[]> buf(new char[total + 1]);
+  int r = httpd_req_recv(req, buf.get(), total);
+  if (r <= 0) {
+    httpd_resp_send_500(req);
+    return ESP_FAIL;
+  }
+  buf[r] = 0;
+
+  String body(buf.get());
+  int k = body.indexOf("\"server_ip\"");
+  if (k >= 0) {
+    int colon = body.indexOf(':', k);
+    int q1 = body.indexOf('"', colon + 1);
+    int q2 = body.indexOf('"', q1 + 1);
+    if (colon >= 0 && q1 >= 0 && q2 > q1) {
+      g_serverIp = body.substring(q1 + 1, q2);
+      static bool started = false;
+      if (!started) {
+        xTaskCreatePinnedToCore(heartbeat_task, "hb_task", 4096, nullptr, 1, nullptr, 1);
+        started = true;
+      }
+    }
+  }
+
+  httpd_resp_set_type(req, "application/json");
+  httpd_resp_set_hdr(req, "Access-Control-Allow-Origin", "*");
+  return httpd_resp_sendstr(req, "{\"ok\":true}");
+}
+
+
 void startCameraServer() {
   httpd_config_t config = HTTPD_DEFAULT_CONFIG();
   config.max_uri_handlers = 16;
@@ -676,12 +776,6 @@ void startCameraServer() {
     .method = HTTP_GET,
     .handler = index_handler,
     .user_ctx = NULL
-#ifdef CONFIG_HTTPD_WS_SUPPORT
-    ,
-    .is_websocket = true,
-    .handle_ws_control_frames = false,
-    .supported_subprotocol = NULL
-#endif
   };
 
   httpd_uri_t status_uri = {
@@ -689,12 +783,6 @@ void startCameraServer() {
     .method = HTTP_GET,
     .handler = status_handler,
     .user_ctx = NULL
-#ifdef CONFIG_HTTPD_WS_SUPPORT
-    ,
-    .is_websocket = true,
-    .handle_ws_control_frames = false,
-    .supported_subprotocol = NULL
-#endif
   };
 
   httpd_uri_t cmd_uri = {
@@ -702,12 +790,6 @@ void startCameraServer() {
     .method = HTTP_GET,
     .handler = cmd_handler,
     .user_ctx = NULL
-#ifdef CONFIG_HTTPD_WS_SUPPORT
-    ,
-    .is_websocket = true,
-    .handle_ws_control_frames = false,
-    .supported_subprotocol = NULL
-#endif
   };
 
   httpd_uri_t capture_uri = {
@@ -715,12 +797,6 @@ void startCameraServer() {
     .method = HTTP_GET,
     .handler = capture_handler,
     .user_ctx = NULL
-#ifdef CONFIG_HTTPD_WS_SUPPORT
-    ,
-    .is_websocket = true,
-    .handle_ws_control_frames = false,
-    .supported_subprotocol = NULL
-#endif
   };
 
   httpd_uri_t stream_uri = {
@@ -728,12 +804,6 @@ void startCameraServer() {
     .method = HTTP_GET,
     .handler = stream_handler,
     .user_ctx = NULL
-#ifdef CONFIG_HTTPD_WS_SUPPORT
-    ,
-    .is_websocket = true,
-    .handle_ws_control_frames = false,
-    .supported_subprotocol = NULL
-#endif
   };
 
   httpd_uri_t bmp_uri = {
@@ -741,12 +811,6 @@ void startCameraServer() {
     .method = HTTP_GET,
     .handler = bmp_handler,
     .user_ctx = NULL
-#ifdef CONFIG_HTTPD_WS_SUPPORT
-    ,
-    .is_websocket = true,
-    .handle_ws_control_frames = false,
-    .supported_subprotocol = NULL
-#endif
   };
 
   httpd_uri_t xclk_uri = {
@@ -754,12 +818,6 @@ void startCameraServer() {
     .method = HTTP_GET,
     .handler = xclk_handler,
     .user_ctx = NULL
-#ifdef CONFIG_HTTPD_WS_SUPPORT
-    ,
-    .is_websocket = true,
-    .handle_ws_control_frames = false,
-    .supported_subprotocol = NULL
-#endif
   };
 
   httpd_uri_t reg_uri = {
@@ -767,12 +825,6 @@ void startCameraServer() {
     .method = HTTP_GET,
     .handler = reg_handler,
     .user_ctx = NULL
-#ifdef CONFIG_HTTPD_WS_SUPPORT
-    ,
-    .is_websocket = true,
-    .handle_ws_control_frames = false,
-    .supported_subprotocol = NULL
-#endif
   };
 
   httpd_uri_t greg_uri = {
@@ -780,12 +832,6 @@ void startCameraServer() {
     .method = HTTP_GET,
     .handler = greg_handler,
     .user_ctx = NULL
-#ifdef CONFIG_HTTPD_WS_SUPPORT
-    ,
-    .is_websocket = true,
-    .handle_ws_control_frames = false,
-    .supported_subprotocol = NULL
-#endif
   };
 
   httpd_uri_t pll_uri = {
@@ -793,12 +839,6 @@ void startCameraServer() {
     .method = HTTP_GET,
     .handler = pll_handler,
     .user_ctx = NULL
-#ifdef CONFIG_HTTPD_WS_SUPPORT
-    ,
-    .is_websocket = true,
-    .handle_ws_control_frames = false,
-    .supported_subprotocol = NULL
-#endif
   };
 
   httpd_uri_t win_uri = {
@@ -806,12 +846,22 @@ void startCameraServer() {
     .method = HTTP_GET,
     .handler = win_handler,
     .user_ctx = NULL
-#ifdef CONFIG_HTTPD_WS_SUPPORT
-    ,
-    .is_websocket = true,
-    .handle_ws_control_frames = false,
-    .supported_subprotocol = NULL
-#endif
+  };
+
+  // CUSTOM: Add flame sensor URI
+  httpd_uri_t flame_uri = {
+    .uri = "/flame",
+    .method = HTTP_GET,
+    .handler = flame_handler,
+    .user_ctx = NULL
+  };
+
+  // CUSTOM: Add discovery URI
+  httpd_uri_t discovery_uri = {
+    .uri = "/discovery",
+    .method = HTTP_POST,
+    .handler = discovery_handler,
+    .user_ctx = NULL
   };
 
   ra_filter_init(&ra_filter, 20);
@@ -829,6 +879,11 @@ void startCameraServer() {
     httpd_register_uri_handler(camera_httpd, &greg_uri);
     httpd_register_uri_handler(camera_httpd, &pll_uri);
     httpd_register_uri_handler(camera_httpd, &win_uri);
+
+    // CUSTOM: Register flame sensor URI
+    httpd_register_uri_handler(camera_httpd, &flame_uri);
+    // CUSTOM: Register discovery URI
+    httpd_register_uri_handler(camera_httpd, &discovery_uri);
   }
 
   config.server_port += 1;
