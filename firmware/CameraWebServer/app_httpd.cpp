@@ -42,6 +42,7 @@ static const uint32_t HEARTBEAT_MS = 30000;
 // AI stream activity tracking
 static int64_t last_jpg_request_time = 0;
 
+// Original function with logging
 static void post_json(const String& url, const String& json) {
   if (!WiFi.isConnected()) return;
   
@@ -62,6 +63,21 @@ static void post_json(const String& url, const String& json) {
   http.end();
 }
 
+// New silent version for heartbeat
+static void post_json_silent(const String& url, const String& json) {
+  if (!WiFi.isConnected()) return;
+
+  HTTPClient http;
+  if (!http.begin(url)) {
+    // Errors should still be logged
+    Serial.println("HTTPClient begin failed");
+    return;
+  }
+  http.addHeader("Content-Type", "application/json");
+  http.POST((uint8_t*)json.c_str(), json.length());
+  http.end();
+}
+
 static void send_register_once() {
   if (g_serverIp.isEmpty()) return;
   String url = "http://" + g_serverIp + ":8080/register";
@@ -73,7 +89,7 @@ static void send_heartbeat() {
   if (g_serverIp.isEmpty()) return;
   String url = "http://" + g_serverIp + ":8080/heartbeat";
   String body = String("{\"device_name\":\"") + DEVICE_NAME + "\",\"ip\":\"" + WiFi.localIP().toString() + "\"}";
-  post_json(url, body);
+  post_json_silent(url, body); // Use the silent version
 }
 
 static void heartbeat_task(void* pv) {

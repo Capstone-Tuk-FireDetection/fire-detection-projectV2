@@ -5,7 +5,7 @@
 #include "board_config.h"
 #include "wifi_config.h"
 
-#define FLAME_PIN 14 // Flame sensor 핀
+#define FLAME_PIN 15 // Flame sensor 핀
 
 // 공유 변수
 volatile bool allowStreaming = true;
