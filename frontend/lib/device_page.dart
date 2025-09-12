@@ -31,8 +31,7 @@ class _DevicePageState extends State<DevicePage> {
     _future = ApiService.fetchDevices();
     _startPolling();
     _startClock();
-    _checkAiStreamStatus(); // Added
-    _startAiStatusPolling(); // Added
+    _checkAiStreamStatus(); // 페이지 로드 시 상태 1회 확인
   }
 
   @override
