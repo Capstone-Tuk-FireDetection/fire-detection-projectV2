@@ -169,6 +169,13 @@ def register():
     if not ip or not name:
         return jsonify({"error": "Invalid payload"}), 400
 
+    # IP 충돌 방지: 이 IP를 사용하던 다른 장치가 있으면 IP를 None으로 변경
+    docs = db.collection('devices').where('ip', '==', ip).stream()
+    for doc in docs:
+        if doc.id != name:
+            print(f"⚠️ IP conflict detected during registration. Device '{doc.id}' had the same IP {ip}. Clearing its IP.")
+            doc.reference.update({'ip': None})
+
     doc_ref = db.collection('devices').document(name)
     # ★ 등록 즉시 online + last_seen 기록
     doc_ref.set({
@@ -209,6 +216,14 @@ def heartbeat():
     ip = data.get("ip")
     if not name:
         return jsonify({"error": "device_name required"}), 400
+
+    # IP 충돌 방지: 이 IP를 사용하던 다른 장치가 있으면 IP를 None으로 변경
+    if ip:
+        docs = db.collection('devices').where('ip', '==', ip).stream()
+        for doc in docs:
+            if doc.id != name:
+                print(f"⚠️ IP conflict detected during heartbeat. Device '{doc.id}' had the same IP {ip}. Clearing its IP.")
+                doc.reference.update({'ip': None})
 
     upd = {
         'status': 'online',
