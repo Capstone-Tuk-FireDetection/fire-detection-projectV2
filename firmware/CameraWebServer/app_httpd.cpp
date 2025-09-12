@@ -39,6 +39,9 @@ static String g_serverIp = "";
 static const char* DEVICE_NAME = "espcam1";
 static const uint32_t HEARTBEAT_MS = 10000;
 
+// AI stream activity tracking
+static int64_t last_jpg_request_time = 0;
+
 static void post_json(const String& url, const String& json) {
   if (!WiFi.isConnected()) return;
   
@@ -77,7 +80,11 @@ static void heartbeat_task(void* pv) {
   send_register_once();
   for (;;)
  {
-    send_heartbeat();
+    int64_t now = esp_timer_get_time();
+    // Only send heartbeat if AI stream seems inactive (no /jpg request for 15s)
+    if ((now - last_jpg_request_time) / 1000 > 15000) {
+        send_heartbeat();
+    }
     vTaskDelay(pdMS_TO_TICKS(HEARTBEAT_MS));
   }
 }
@@ -263,6 +270,7 @@ static esp_err_t capture_handler(httpd_req_t *req) {
 }
 
 static esp_err_t jpg_handler(httpd_req_t *req) {
+  last_jpg_request_time = esp_timer_get_time(); // Track AI stream activity
   camera_fb_t *fb = NULL;
   esp_err_t res = ESP_OK;
 #if ARDUHAL_LOG_LEVEL >= ARDUHAL_LOG_LEVEL_INFO
