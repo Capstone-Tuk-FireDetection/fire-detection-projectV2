@@ -13,9 +13,149 @@
 	"severity": 8,
 	"message": "Undefined name 'clockTimer'.\nTry correcting the name to one that is defined, or defining the name.",
 	"source": "dart",
-	"startLineNumber": 58,
+	"startLineNumber": 53,
 	"startColumn": 7,
-	"endLineNumber": 58,
+	"endLineNumber": 53,
 	"endColumn": 17,
+	"origin": "extHost1"
+},{
+	"resource": "/C:/Users/C.C/OneDrive/문서/GitHub/temp/fire-detection-projectV2/frontend/lib/device_page.dart",
+	"owner": "_generated_diagnostic_collection_name_#1",
+	"code": {
+		"value": "argument_type_not_assignable",
+		"target": {
+			"$mid": 1,
+			"path": "/diagnostics/argument_type_not_assignable",
+			"scheme": "https",
+			"authority": "dart.dev"
+		}
+	},
+	"severity": 8,
+	"message": "The argument type 'void Function()' can't be assigned to the parameter type 'void Function(Timer)'. ",
+	"source": "dart",
+	"startLineNumber": 53,
+	"startColumn": 63,
+	"endLineNumber": 55,
+	"endColumn": 8,
+	"origin": "extHost1"
+},{
+	"resource": "/C:/Users/C.C/OneDrive/문서/GitHub/temp/fire-detection-projectV2/frontend/lib/device_page.dart",
+	"owner": "_generated_diagnostic_collection_name_#1",
+	"code": {
+		"value": "use_build_context_synchronously",
+		"target": {
+			"$mid": 1,
+			"path": "/diagnostics/use_build_context_synchronously",
+			"scheme": "https",
+			"authority": "dart.dev"
+		}
+	},
+	"severity": 2,
+	"message": "Don't use 'BuildContext's across async gaps.\nTry rewriting the code to not use the 'BuildContext', or guard the use with a 'mounted' check.",
+	"source": "dart",
+	"startLineNumber": 134,
+	"startColumn": 32,
+	"endLineNumber": 134,
+	"endColumn": 39,
+	"origin": "extHost1"
+},{
+	"resource": "/C:/Users/C.C/OneDrive/문서/GitHub/temp/fire-detection-projectV2/frontend/lib/device_page.dart",
+	"owner": "_generated_diagnostic_collection_name_#1",
+	"code": {
+		"value": "use_build_context_synchronously",
+		"target": {
+			"$mid": 1,
+			"path": "/diagnostics/use_build_context_synchronously",
+			"scheme": "https",
+			"authority": "dart.dev"
+		}
+	},
+	"severity": 2,
+	"message": "Don't use 'BuildContext's across async gaps.\nTry rewriting the code to not use the 'BuildContext', or guard the use with a 'mounted' check.",
+	"source": "dart",
+	"startLineNumber": 139,
+	"startColumn": 32,
+	"endLineNumber": 139,
+	"endColumn": 39,
+	"origin": "extHost1"
+},{
+	"resource": "/C:/Users/C.C/OneDrive/문서/GitHub/temp/fire-detection-projectV2/frontend/lib/device_page.dart",
+	"owner": "_generated_diagnostic_collection_name_#1",
+	"code": {
+		"value": "use_build_context_synchronously",
+		"target": {
+			"$mid": 1,
+			"path": "/diagnostics/use_build_context_synchronously",
+			"scheme": "https",
+			"authority": "dart.dev"
+		}
+	},
+	"severity": 2,
+	"message": "Don't use 'BuildContext's across async gaps.\nTry rewriting the code to not use the 'BuildContext', or guard the use with a 'mounted' check.",
+	"source": "dart",
+	"startLineNumber": 144,
+	"startColumn": 30,
+	"endLineNumber": 144,
+	"endColumn": 37,
+	"origin": "extHost1"
+},{
+	"resource": "/C:/Users/C.C/OneDrive/문서/GitHub/temp/fire-detection-projectV2/frontend/lib/device_page.dart",
+	"owner": "_generated_diagnostic_collection_name_#1",
+	"code": {
+		"value": "unnecessary_brace_in_string_interps",
+		"target": {
+			"$mid": 1,
+			"path": "/diagnostics/unnecessary_brace_in_string_interps",
+			"scheme": "https",
+			"authority": "dart.dev"
+		}
+	},
+	"severity": 2,
+	"message": "Unnecessary braces in a string interpolation.\nTry removing the braces.",
+	"source": "dart",
+	"startLineNumber": 162,
+	"startColumn": 27,
+	"endLineNumber": 162,
+	"endColumn": 31,
+	"origin": "extHost1"
+},{
+	"resource": "/C:/Users/C.C/OneDrive/문서/GitHub/temp/fire-detection-projectV2/frontend/lib/device_page.dart",
+	"owner": "_generated_diagnostic_collection_name_#1",
+	"code": {
+		"value": "unnecessary_brace_in_string_interps",
+		"target": {
+			"$mid": 1,
+			"path": "/diagnostics/unnecessary_brace_in_string_interps",
+			"scheme": "https",
+			"authority": "dart.dev"
+		}
+	},
+	"severity": 2,
+	"message": "Unnecessary braces in a string interpolation.\nTry removing the braces.",
+	"source": "dart",
+	"startLineNumber": 163,
+	"startColumn": 15,
+	"endLineNumber": 163,
+	"endColumn": 19,
+	"origin": "extHost1"
+},{
+	"resource": "/C:/Users/C.C/OneDrive/문서/GitHub/temp/fire-detection-projectV2/frontend/lib/device_page.dart",
+	"owner": "_generated_diagnostic_collection_name_#1",
+	"code": {
+		"value": "unnecessary_brace_in_string_interps",
+		"target": {
+			"$mid": 1,
+			"path": "/diagnostics/unnecessary_brace_in_string_interps",
+			"scheme": "https",
+			"authority": "dart.dev"
+		}
+	},
+	"severity": 2,
+	"message": "Unnecessary braces in a string interpolation.\nTry removing the braces.",
+	"source": "dart",
+	"startLineNumber": 163,
+	"startColumn": 22,
+	"endLineNumber": 163,
+	"endColumn": 26,
 	"origin": "extHost1"
 }]
