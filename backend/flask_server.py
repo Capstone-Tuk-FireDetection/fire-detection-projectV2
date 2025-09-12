@@ -371,16 +371,25 @@ def stream_device(device):
 # ✅ 스냅샷 API
 @app.route("/snapshot/<device>")
 def snapshot_device(device):
+    print(f"-> Received /snapshot request for device: {device}")
     doc = db.collection('devices').document(device).get()
     if not doc.exists:
+        print(f"  - ❌ Snapshot failed: Device '{device}' not found in Firestore.")
         return Response("Device not found", status=404)
+    
     device_info = doc.to_dict()
     ip = device_info.get('ip')
+    print(f"  - Found device '{device}' in Firestore with IP: {ip}")
     if not ip:
+        print(f"  - ❌ Snapshot failed: IP address not found for device '{device}'.")
         return Response("Device IP not found", status=404)
 
     try:
+        print(f"  - Attempting to get snapshot from http://{ip}/jpg")
         r = requests.get(f"http://{ip}/jpg", timeout=5, stream=True)
+        
+        print(f"  - Snapshot request to ESP32 returned status: {r.status_code}")
+        
         # ★ 성공하면 last_seen/status 갱신
         db.collection('devices').document(device).update({
             'last_seen': firestore.SERVER_TIMESTAMP,
@@ -389,7 +398,7 @@ def snapshot_device(device):
         headers = [(name, value) for (name, value) in r.raw.headers.items()]
         return Response(r.content, r.status_code, headers)
     except requests.RequestException as e:
-        print(f"❌ 스냅샷 오류({device}):", e)
+        print(f"  - ❌ Snapshot request to ESP32 failed: {e}")
         return Response(f"Failed to get snapshot from {device}", status=503)
 
 
