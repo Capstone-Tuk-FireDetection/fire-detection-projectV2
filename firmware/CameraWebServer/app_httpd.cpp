@@ -262,6 +262,60 @@ static esp_err_t capture_handler(httpd_req_t *req) {
   return res;
 }
 
+static esp_err_t jpg_handler(httpd_req_t *req) {
+  camera_fb_t *fb = NULL;
+  esp_err_t res = ESP_OK;
+#if ARDUHAL_LOG_LEVEL >= ARDUHAL_LOG_LEVEL_INFO
+  int64_t fr_start = esp_timer_get_time();
+#endif
+
+#if defined(LED_GPIO_NUM)
+  enable_led(true);
+  vTaskDelay(150 / portTICK_PERIOD_MS);
+  fb = esp_camera_fb_get();
+  enable_led(false);
+#else
+  fb = esp_camera_fb_get();
+#endif
+
+  if (!fb) {
+    log_e("Camera capture failed");
+    httpd_resp_send_500(req);
+    return ESP_FAIL;
+  }
+
+  httpd_resp_set_type(req, "image/jpeg");
+  httpd_resp_set_hdr(req, "Content-Disposition", "inline; filename=capture.jpg");
+  httpd_resp_set_hdr(req, "Access-Control-Allow-Origin", "*");
+
+  char ts[32];
+  snprintf(ts, 32, "%lld.%06ld", fb->timestamp.tv_sec, fb->timestamp.tv_usec);
+  httpd_resp_set_hdr(req, "X-Timestamp", (const char *)ts);
+
+#if ARDUHAL_LOG_LEVEL >= ARDUHAL_LOG_LEVEL_INFO
+  size_t fb_len = 0;
+#endif
+  if (fb->format == PIXFORMAT_JPEG) {
+#if ARDUHAL_LOG_LEVEL >= ARDUHAL_LOG_LEVEL_INFO
+    fb_len = fb->len;
+#endif
+    res = httpd_resp_send(req, (const char *)fb->buf, fb->len);
+  } else {
+    jpg_chunking_t jchunk = {req, 0};
+    res = frame2jpg_cb(fb, 80, jpg_encode_stream, &jchunk) ? ESP_OK : ESP_FAIL;
+    httpd_resp_send_chunk(req, NULL, 0);
+#if ARDUHAL_LOG_LEVEL >= ARDUHAL_LOG_LEVEL_INFO
+    fb_len = jchunk.len;
+#endif
+  }
+  esp_camera_fb_return(fb);
+#if ARDUHAL_LOG_LEVEL >= ARDUHAL_LOG_LEVEL_INFO
+  int64_t fr_end = esp_timer_get_time();
+#endif
+  log_i("JPG: %uB %ums", (uint32_t)(fb_len), (uint32_t)((fr_end - fr_start) / 1000));
+  return res;
+}
+
 static esp_err_t stream_handler(httpd_req_t *req) {
   camera_fb_t *fb = NULL;
   struct timeval _timestamp;
@@ -810,6 +864,13 @@ void startCameraServer() {
     .handler = capture_handler,
     .user_ctx = NULL
   };
+
+        httpd_uri_t jpg_uri = {
+        .uri = "/jpg",
+        .method = HTTP_GET,
+        .handler = jpg_handler,
+        .user_ctx = NULL
+      };
 
   httpd_uri_t stream_uri = {
     .uri = "/stream",
