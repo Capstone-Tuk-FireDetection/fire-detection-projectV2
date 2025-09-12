@@ -41,10 +41,21 @@ static const uint32_t HEARTBEAT_MS = 10000;
 
 static void post_json(const String& url, const String& json) {
   if (!WiFi.isConnected()) return;
+  
+  Serial.print("POST to url: ");
+  Serial.println(url);
+
   HTTPClient http;
-  if (!http.begin(url)) return;
+  if (!http.begin(url)) {
+    Serial.println("HTTPClient begin failed");
+    return;
+  }
   http.addHeader("Content-Type", "application/json");
-  http.POST((uint8_t*)json.c_str(), json.length());
+  int httpCode = http.POST((uint8_t*)json.c_str(), json.length());
+
+  Serial.print("HTTP Response code: ");
+  Serial.println(httpCode);
+
   http.end();
 }
 
