@@ -1,8 +1,3 @@
-WiFi connected
-Camera Ready! Use 'http://192.168.51.90' to connect
-Discovery request received!
-POST to url: http://192.168.51.187:8080/register
-HTTP Response code: 200
-POST to url: http://192.168.51.187:8080/heartbeat
-HTTP Response code: 200
-Discovery request received!
+ ✅ Service worker 등록 성공 ServiceWorkerRegistration
+ This app is linked to the debug service: ws://127.0.0.1:53055/EFqKUsTAuEQ=/ws
+:8080/snapshot/espcam1?v=1:1  Failed to load resource: the server responded with a status of 404 (NOT FOUND)
