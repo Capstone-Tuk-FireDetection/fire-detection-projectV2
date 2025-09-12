@@ -37,6 +37,34 @@ class ApiService {
   }
 
   /// MJPEG 스트림 URL (단순 문자열 반환)
-  static String snapshotUrl([String? device]) =>
-      device == null ? '$backendBaseUrl/snapshot' : '$backendBaseUrl/snapshot/$device';
+        static String snapshotUrl([String? device]) =>
+          device == null ? '$backendBaseUrl/snapshot' : '$backendBaseUrl/snapshot/$device';
+
+      static Future<Map<String, dynamic>> startAiStream() async {
+        final uri = Uri.parse('$backendBaseUrl/start_ai_stream');
+        final res = await _client.post(uri);
+        if (res.statusCode == 200) {
+          return jsonDecode(res.body) as Map<String, dynamic>;
+        }
+        throw Exception('Failed to start AI stream: ${res.statusCode} ${res.body}');
+      }
+
+      static Future<Map<String, dynamic>> stopAiStream() async {
+        final uri = Uri.parse('$backendBaseUrl/stop_ai_stream');
+        final res = await _client.post(uri);
+        if (res.statusCode == 200) {
+          return jsonDecode(res.body) as Map<String, dynamic>;
+        }
+        throw Exception('Failed to stop AI stream: ${res.statusCode} ${res.body}');
+      }
+
+      static Future<Map<String, dynamic>> getAiStreamStatus() async {
+        final uri = Uri.parse('$backendBaseUrl/ai_stream_status');
+        final res = await _client.get(uri);
+        if (res.statusCode == 200) {
+          return jsonDecode(res.body) as Map<String, dynamic>;
+        }
+        throw Exception('Failed to get AI stream status: ${res.statusCode} ${res.body}');
+      }
+    }
 }

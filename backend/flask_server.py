@@ -9,8 +9,12 @@ import socket
 import ipaddress
 import time
 import os
+import subprocess
+import sys
 # ★ 추가
 from datetime import datetime, timezone
+
+ai_process = None
 
 app = Flask(__name__)
 CORS(app, resources={r"/*": {"origins": "*"}}, supports_credentials=True)
@@ -402,7 +406,7 @@ def snapshot_device(device):
         return Response(f"Failed to get snapshot from {device}", status=503)
 
 
-# ✅ 알림 수신 API
+    # ✅ 알림 수신 API
 @app.route("/alert", methods=["POST"])
 def alert():
     data = request.get_json()
@@ -411,6 +415,68 @@ def alert():
         print(f"🔥 불꽃 감지됨! [디바이스: {device}]")
         send_fcm_notification_to_all("불꽃 감지", f"🔥 {device} 장치에서 불꽃이 감지되었습니다.")
     return jsonify({"received": True})
+
+
+# --- AI Stream Control Endpoints ---
+@app.route("/start_ai_stream", methods=["POST"])
+def start_ai_stream():
+    global ai_process
+    if ai_process and ai_process.poll() is None:
+        return jsonify({"status": "AI stream already running"}), 200
+
+    try:
+        # Ensure the script path is correct
+        ai_script_path = os.path.join(script_dir, 'stream_flame_detection.py')
+        if not os.path.exists(ai_script_path):
+            return jsonify({"error": f"AI script not found at {ai_script_path}"}), 500
+
+        command = [
+            sys.executable, # Use the current Python interpreter
+            ai_script_path,
+            "--device_name", "espcam1", # Hardcoded device name from app_httpd.cpp
+            "--server_url", "http://localhost:8080" # Default Flask server URL
+        ]
+        
+        # Start the subprocess
+        # Using preexec_fn=os.setsid on Unix-like systems to detach,
+        # but for Windows, it's more complex. For simplicity, let it run
+        # as a child process of Flask.
+        ai_process = subprocess.Popen(command)
+        print(f"✅ AI stream started with PID: {ai_process.pid}")
+        return jsonify({"status": "AI stream started", "pid": ai_process.pid}), 200
+    except Exception as e:
+        print(f"❌ Failed to start AI stream: {e}")
+        return jsonify({"error": f"Failed to start AI stream: {str(e)}"}), 500
+
+@app.route("/stop_ai_stream", methods=["POST"])
+def stop_ai_stream():
+    global ai_process
+    if ai_process and ai_process.poll() is None:
+        try:
+            ai_process.terminate() # Gracefully terminate the process
+            ai_process.wait(timeout=5) # Wait for it to terminate
+            print(f"✅ AI stream (PID: {ai_process.pid}) stopped.")
+            ai_process = None
+            return jsonify({"status": "AI stream stopped"}), 200
+        except subprocess.TimeoutExpired:
+            ai_process.kill() # Force kill if terminate fails
+            print(f"🚨 AI stream (PID: {ai_process.pid}) killed after timeout.")
+            ai_process = None
+            return jsonify({"status": "AI stream killed (timeout)"}), 200
+        except Exception as e:
+            print(f"❌ Error stopping AI stream: {e}")
+            return jsonify({"error": f"Error stopping AI stream: {str(e)}"}), 500
+    else:
+        return jsonify({"status": "AI stream not running"}), 200
+
+@app.route("/ai_stream_status", methods=["GET"])
+def ai_stream_status():
+    global ai_process
+    if ai_process and ai_process.poll() is None:
+        return jsonify({"status": "running", "pid": ai_process.pid}), 200
+    else:
+        return jsonify({"status": "not running"}), 200
+# --- End AI Stream Control Endpoints ---
 
 
 # ★ 추가: 오래된(last_seen) 장치 offline 스윕

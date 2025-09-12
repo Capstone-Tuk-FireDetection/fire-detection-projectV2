@@ -17,7 +17,13 @@ class _DevicePageState extends State<DevicePage> {
 
   Timer? _pollTimer;
   Timer? _clockTimer;
+  Timer? _aiStatusTimer; // Added
   static const _pollInterval = Duration(seconds: 20);
+  static const _aiStatusPollInterval = Duration(seconds: 5); // Added
+
+  String _aiStreamStatus = '확인 중...'; // Added
+  bool _isAiStreamRunning = false; // Added
+  bool _isAiActionPending = false; // Added
 
   @override
   void initState() {
@@ -25,12 +31,15 @@ class _DevicePageState extends State<DevicePage> {
     _future = ApiService.fetchDevices();
     _startPolling();
     _startClock();
+    _checkAiStreamStatus(); // Added
+    _startAiStatusPolling(); // Added
   }
 
   @override
   void dispose() {
     _pollTimer?.cancel();
     _clockTimer?.cancel();
+    _aiStatusTimer?.cancel(); // Added
     super.dispose();
   }
 
@@ -88,14 +97,80 @@ class _DevicePageState extends State<DevicePage> {
     }
   }
 
-  String _timeAgo(DateTime when) {
-    final diff = DateTime.now().difference(when);
-    if (diff.inMinutes < 1) return '방금 전';
-    if (diff.inMinutes < 60) return '${diff.inMinutes}분 전';
-    final h = diff.inHours, m = diff.inMinutes % 60;
-    if (m == 0) return '${h}시간 전';
-    return '${h}시간 ${m}분 전';
-  }
+        void _startAiStatusPolling() {
+        _aiStatusTimer?.cancel();
+        _aiStatusTimer = Timer.periodic(_aiStatusPollInterval, (_) => _checkAiStreamStatus());
+      }
+
+      Future<void> _checkAiStreamStatus() async {
+        try {
+          final status = await ApiService.getAiStreamStatus();
+          if (!mounted) return;
+          setState(() {
+            _aiStreamStatus = status['status'] == 'running' ? '실행 중 (PID: ${status['pid']})' : '중지됨';
+            _isAiStreamRunning = status['status'] == 'running';
+          });
+        } catch (e) {
+          if (mounted) {
+            setState(() {
+              _aiStreamStatus = '상태 확인 오류: $e';
+              _isAiStreamRunning = false;
+            });
+          }
+        }
+      }
+
+      Future<void> _toggleAiStream() async {
+        if (_isAiActionPending) return; // Prevent multiple clicks
+
+        setState(() {
+          _isAiActionPending = true;
+          _aiStreamStatus = _isAiStreamRunning ? '중지 중...' : '시작 중...';
+        });
+
+        try {
+          if (_isAiStreamRunning) {
+            await ApiService.stopAiStream();
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('AI 스트림을 중지했습니다.')),
+            );
+          } else {
+            await ApiService.startAiStream();
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('AI 스트림을 시작했습니다.')),
+            );
+          }
+        } catch (e) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('AI 스트림 제어 오류: $e')),
+          );
+        } finally {
+          if (mounted) {
+            setState(() {
+              _isAiActionPending = false;
+            });
+            _checkAiStreamStatus(); // Refresh status after action
+          }
+        }
+      }
+
+      String _timeAgo(DateTime when) {
+        final diff = DateTime.now().difference(when);
+        if (diff.inMinutes < 1) return '방금 전';
+        if (diff.inMinutes < 60) return '${diff.inMinutes}분 전';
+        final h = diff.inHours, m = diff.inMinutes % 60;
+        if (m == 0) return '${h}시간 전';
+        return '${h}시간 ${m}분 전';
+      }
+
+      String _timeAgo(DateTime when) {
+        final diff = DateTime.now().difference(when);
+        if (diff.inMinutes < 1) return '방금 전';
+        if (diff.inMinutes < 60) return '${diff.inMinutes}분 전';
+        final h = diff.inHours, m = diff.inMinutes % 60;
+        if (m == 0) return '${h}시간 전';
+        return '${h}시간 ${m}분 전';
+      }
 
   @override
   Widget build(BuildContext context) {
@@ -142,6 +217,39 @@ class _DevicePageState extends State<DevicePage> {
           return ListView(
             padding: const EdgeInsets.all(16),
             children: [
+              // ===== AI 스트림 제어 =====
+              Card(
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Row(
+                        children: const [
+                          Icon(Icons.psychology_alt),
+                          SizedBox(width: 8),
+                          Text('AI 스트림 제어', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      Text('상태: $_aiStreamStatus', style: const TextStyle(fontSize: 14)),
+                      const SizedBox(height: 16),
+                      ElevatedButton(
+                        onPressed: _isAiActionPending ? null : _toggleAiStream,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: _isAiStreamRunning ? Colors.red : Colors.green,
+                          foregroundColor: Colors.white,
+                        ),
+                        child: Text(_isAiStreamRunning ? 'AI 스트림 중지' : 'AI 스트림 시작'),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+
+              const SizedBox(height: 16),
+
               // ===== 온라인 기기 =====
               Card(
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
