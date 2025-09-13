@@ -139,23 +139,56 @@ class _DevicePageState extends State<DevicePage> {
     _aiStatusTimer = Timer.periodic(_aiStatusPollInterval, (_) => _checkAiStreamStatus());
   }
 
-  Future<void> _checkAiStreamStatus() async {
-    try {
-      final status = await ApiService.getAiStreamStatus();
-      if (!mounted) return;
+Future<void> _checkAiStreamStatus() async {
+  try {
+    final status = await ApiService.getAiStreamStatus();
+    if (!mounted) return;
+
+    final running = status['status'] == 'running';
+    if (running) {
       setState(() {
-        _aiStreamStatus = status['status'] == 'running' ? '실행 중 (PID: ${status['pid']})' : '중지됨';
-        _isAiStreamRunning = status['status'] == 'running';
+        _aiStreamStatus = '실행 중 (PID: ${status['pid']})';
+        _isAiStreamRunning = true;
       });
-    } catch (e) {
-      if (mounted) {
-        setState(() {
-          _aiStreamStatus = '상태 확인 오류: $e';
-          _isAiStreamRunning = false;
-        });
+    } else {
+      // ✅ 실행 중이 아니면 폴링 중단 + 장치 폴링 재개
+      final wasRunning = _isAiStreamRunning;
+      _aiStatusTimer?.cancel();
+      _aiStatusTimer = null;
+
+      if (_pollTimer == null || !_pollTimer!.isActive) {
+        _startPolling();
+      }
+
+      setState(() {
+        _aiStreamStatus = '중지됨';
+        _isAiStreamRunning = false;
+      });
+
+      // 직전에 실행 중이었다가 멈춘 경우 한 번만 안내
+      if (wasRunning && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('AI 스트림이 중지되었습니다.')),
+        );
       }
     }
+  } catch (e) {
+    if (!mounted) return;
+    // ❗ 오류 발생 시에도 폴링 계속 돌리면 로그만 쌓이므로 중단
+    _aiStatusTimer?.cancel();
+    _aiStatusTimer = null;
+
+    if (_pollTimer == null || !_pollTimer!.isActive) {
+      _startPolling();
+    }
+
+    setState(() {
+      _aiStreamStatus = '상태 확인 오류';
+      _isAiStreamRunning = false;
+    });
   }
+}
+
 
   Future<void> _toggleAiStream() async {
     if (_isAiActionPending) return;
@@ -175,19 +208,33 @@ class _DevicePageState extends State<DevicePage> {
           const SnackBar(content: Text('AI 스트림을 중지했습니다.')),
         );
       } else {
-        await ApiService.startAiStream();
-        _startAiStatusPolling();
-        _pollTimer?.cancel();
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('AI 스트림을 시작했습니다.')),
-        );
-      }
-    } catch (e) {
-      if (!mounted) return;
+try {
+    final res = await ApiService.startAiStream(); // Map<String,dynamic> 반환 가정
+    // 서버가 online 장치를 자동 선택 → device_name 포함하여 안내
+    final chosen = res['device_name']?.toString();
+    if (!mounted) return;
+
+    if (chosen != null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('AI 스트림 제어 오류: $e')),
+        SnackBar(content: Text('AI 스트림 시작: $chosen')),
       );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('AI 스트림을 시작했습니다.')),
+      );
+    }
+
+    _startAiStatusPolling(); // 상태 폴링 시작
+    _pollTimer?.cancel();    // 장치 목록 폴링은 일시 중단
+  } catch (e) {
+    if (!mounted) return;
+    // 서버가 409(온라인 장치 없음/오프라인) 등으로 실패하면 여기로 옴
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('AI 스트림 시작 실패: $e')),
+    );
+    // 폴링은 중단하지 않음 (디바이스 목록 갱신 유지)
+  }
+}
     } finally {
       if (mounted) {
         setState(() {

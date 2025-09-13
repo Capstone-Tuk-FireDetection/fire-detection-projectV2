@@ -98,6 +98,22 @@ def rescan_devices():
 
 # --- 🔼 [추가] 네트워크 탐색 기능 🔼 ---
 
+# 온라인 상태인 esp 선택후 AI 스트림에 사용
+def _pick_online_device_name():
+    """Firestore에서 online으로 간주되는 장치 중 last_seen이 가장 최근인 장치명을 리턴."""
+    now = datetime.now(timezone.utc)
+    best_name = None
+    best_seen = datetime.fromtimestamp(0, tz=timezone.utc)
+
+    for doc in db.collection('devices').stream():
+        d = doc.to_dict() or {}
+        last_seen = _to_dt(d.get('last_seen'))
+        if last_seen and (now - last_seen).total_seconds() <= ONLINE_TTL_SEC:
+            if last_seen > best_seen:
+                best_name = doc.id
+                best_seen = last_seen
+    return best_name
+
 
 # ✅ FCM 알림 함수 (Firestore 연동으로 수정)
 def send_fcm_notification_to_all(title, body):
@@ -438,41 +454,60 @@ def alert():
     return jsonify({"received": True})
 
 
-# --- AI Stream Control Endpoints ---
 @app.route("/start_ai_stream", methods=["POST"])
 def start_ai_stream():
     global ai_process
     if ai_process and ai_process.poll() is None:
         return jsonify({"status": "AI stream already running"}), 200
 
+    # 요청 바디에서 device_name(optional) 받기. 없거나 "auto"면 자동 선택
+    data = request.get_json(silent=True) or {}
+    req_device = (data.get("device_name") or "").strip()
+
+    # 온라인 장치 자동 선택
+    if not req_device or req_device.lower() == "auto":
+        chosen = _pick_online_device_name()
+        if not chosen:
+            return jsonify({"error": "no online devices"}), 409
+    else:
+        # 특정 장치가 지정된 경우, 온라인 여부 확인
+        doc = db.collection('devices').document(req_device).get()
+        if not doc.exists:
+            return jsonify({"error": f"device '{req_device}' not found"}), 404
+        d = doc.to_dict() or {}
+        last_seen = _to_dt(d.get('last_seen'))
+        now = datetime.now(timezone.utc)
+        is_online = last_seen and (now - last_seen).total_seconds() <= ONLINE_TTL_SEC
+        if not is_online:
+            return jsonify({"error": f"device '{req_device}' is offline"}), 409
+        chosen = req_device
+
     try:
-        # Ensure the script path is correct
         ai_script_path = os.path.join(script_dir, 'stream_flame_detection.py')
         if not os.path.exists(ai_script_path):
             return jsonify({"error": f"AI script not found at {ai_script_path}"}), 500
 
+        # 서버의 실제 접근 가능한 URL 사용 (로컬 IP)
+        server_url = f"http://{get_local_ip()}:8080"
+
         command = [
-            sys.executable, # Use the current Python interpreter
+            sys.executable,
             ai_script_path,
-            "--device_name", "espcam1", # Hardcoded device name from app_httpd.cpp
-            "--server_url", "http://localhost:8080" # Default Flask server URL
+            "--device_name", chosen,
+            "--server_url", server_url
         ]
-        
-        # Start the subprocess
-        # Using preexec_fn=os.setsid on Unix-like systems to detach,
-        # but for Windows, it's more complex. For simplicity, let it run
-        # as a child process of Flask.
-        # On Windows, open in a new console window to show logs.
+
         popen_kwargs = {}
         if sys.platform == "win32":
             popen_kwargs['creationflags'] = subprocess.CREATE_NEW_CONSOLE
-        
+
         ai_process = subprocess.Popen(command, **popen_kwargs)
-        print(f"✅ AI stream started with PID: {ai_process.pid}")
-        return jsonify({"status": "AI stream started", "pid": ai_process.pid}), 200
+        print(f"✅ AI stream started with PID: {ai_process.pid} (device: {chosen})")
+        return jsonify({"status": "AI stream started", "pid": ai_process.pid, "device_name": chosen}), 200
     except Exception as e:
         print(f"❌ Failed to start AI stream: {e}")
         return jsonify({"error": f"Failed to start AI stream: {str(e)}"}), 500
+
 
 @app.route("/stop_ai_stream", methods=["POST"])
 def stop_ai_stream():
