@@ -118,7 +118,7 @@ def run_inference(device_name, server_url):
 
             sensor_value = read_flame_sensor(server_url, device_name)
             ai_detected = flame_prob > 0.85
-            sensor_detected = (sensor_value == 1)
+            sensor_detected = (sensor_value == 0)
             final_result = ai_detected and sensor_detected
 
             # 알림 제한
