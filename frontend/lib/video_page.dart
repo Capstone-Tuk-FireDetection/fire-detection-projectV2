@@ -28,15 +28,26 @@ class _VideoPageState extends State<VideoPage> {
   }
 
   // 이미지 새로고침 함수
-  void _refreshSnapshot() {
-    if (_selected == null) return;
-    setState(() {
-      _isLoading = true;
-      _imageVersion++;
-      _snapshotUrl = '${ApiService.snapshotUrl(_selected)}?v=$_imageVersion';
-      _flameF = ApiService.fetchFlame(); // (참고) 여러 디바이스면 ApiService에 파라미터 추가 권장
-    });
+void _refreshSnapshot() {
+  if (_selected == null) return;
+
+  // 고유한 쿼리 파라미터(마이크로초)로 캐시 완전 회피
+  final ts = DateTime.now().microsecondsSinceEpoch;
+
+  // 이전 URL이 있었다면 캐시에서 제거(선택)
+  if (_snapshotUrl != null) {
+    final old = NetworkImage(_snapshotUrl!);
+    old.evict(); // PaintingBinding.instance.imageCache.evict(...)
   }
+
+  setState(() {
+    _isLoading = true;
+    _snapshotUrl = '${ApiService.snapshotUrl(_selected)}?t=$ts';
+    // 여러 디바이스 지원하려면 fetchFlame(_selected!)로 변경 권장
+    _flameF = ApiService.fetchFlame();
+  });
+}
+
 
   @override
   Widget build(BuildContext context) {
