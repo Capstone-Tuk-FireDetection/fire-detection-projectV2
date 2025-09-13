@@ -75,4 +75,19 @@ class ApiService {
         }
       }
 
+    // 최근 알람 조회
+    static Future<List<Map<String, dynamic>>> fetchAlerts({int limit = 50, String? device}) async {
+      final qp = <String, String>{"limit": "$limit"};
+      if (device != null && device.isNotEmpty) qp["device"] = device;
+      final uri = Uri.parse('$backendBaseUrl/alerts').replace(queryParameters: qp);
+      final res = await _client.get(uri);
+      if (res.statusCode == 200) {
+        final list = jsonDecode(res.body) as List<dynamic>;
+        return list.cast<Map<String, dynamic>>();
+      }
+      throw Exception('Failed to load alerts (${res.statusCode})');
+    }
+
+
+
     }

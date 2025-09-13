@@ -13,6 +13,7 @@ import subprocess
 import sys
 # ★ 추가
 from datetime import datetime, timezone
+from google.cloud import firestore as gcf 
 
 ai_process = None
 
@@ -443,15 +444,67 @@ def snapshot_device(device):
         return Response(f"Failed to get snapshot from {device}", status=503)
 
 
-    # ✅ 알림 수신 API
+# ✅ 알림 수신 API
 @app.route("/alert", methods=["POST"])
 def alert():
     data = request.get_json()
     if data.get("flame") == 1:
         device = data.get("device", "(unknown)")
+        title = "불꽃 감지"
+        body = f"🔥 {device} 장치에서 불꽃이 감지되었습니다."
         print(f"🔥 불꽃 감지됨! [디바이스: {device}]")
-        send_fcm_notification_to_all("불꽃 감지", f"🔥 {device} 장치에서 불꽃이 감지되었습니다.")
+
+        # ★ Firestore에 기록
+        db.collection('alerts').add({
+            'device': device,
+            'title': title,
+            'body': body,
+            'flame': 1,
+            'created_at': firestore.SERVER_TIMESTAMP,
+        })
+
+        send_fcm_notification_to_all(title, body)
     return jsonify({"received": True})
+
+def _parse_iso_or_none(s):
+    if not s:
+        return None
+    try:
+        # 'Z' → '+00:00' 보정
+        return datetime.fromisoformat(s.replace('Z', '+00:00'))
+    except Exception:
+        return None
+
+@app.route("/alerts", methods=["GET"])
+def list_alerts():
+    # /alerts?limit=50&device=espcam1&since=2025-09-13T00:00:00+00:00
+    limit = int(request.args.get("limit", "50"))
+    device = request.args.get("device")
+    since_iso = request.args.get("since")
+    since_dt = _parse_iso_or_none(since_iso)
+
+    q = db.collection('alerts')
+    if device:
+        q = q.where('device', '==', device)
+    if since_dt:
+        q = q.where('created_at', '>=', since_dt)
+
+    # 최신순 정렬
+    q = q.order_by('created_at', direction=gcf.Query.DESCENDING).limit(limit)
+
+    items = []
+    for doc in q.stream():
+        d = doc.to_dict() or {}
+        created = _to_dt(d.get('created_at'))
+        items.append({
+            "id": doc.id,
+            "device": d.get("device"),
+            "title": d.get("title"),
+            "body": d.get("body"),
+            "flame": d.get("flame"),
+            "created_at": created.isoformat() if created else None,
+        })
+    return jsonify(items)
 
 
 @app.route("/start_ai_stream", methods=["POST"])

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'device_page.dart';
 import 'video_page.dart';
+import 'records_page.dart'; // ★ 추가
 import 'user_page.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -12,7 +13,8 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   int _idx = 0;
-  final _pages = const [DevicePage(), VideoPage(), UserPage()];
+  // ★ 페이지 배열에 기록 탭 추가 (영상과 사용자 사이)
+  final _pages = const [DevicePage(), VideoPage(), RecordsPage(), UserPage()];
 
   @override
   Widget build(BuildContext context) {
@@ -33,6 +35,7 @@ class _HomeScreenState extends State<HomeScreen> {
         destinations: const [
           NavigationDestination(icon: Icon(Icons.sensors), label: '장치'),
           NavigationDestination(icon: Icon(Icons.videocam), label: '영상'),
+          NavigationDestination(icon: Icon(Icons.history), label: '기록'), // ★ 추가
           NavigationDestination(icon: Icon(Icons.person), label: '사용자'),
         ],
         onDestinationSelected: (i) => setState(() => _idx = i),
