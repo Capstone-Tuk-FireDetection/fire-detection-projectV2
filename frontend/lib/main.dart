@@ -100,7 +100,7 @@ class _FireCamAppState extends State<FireCamApp> {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Smart FireCam',
+      title: 'TinoWatch',
       scaffoldMessengerKey: scaffoldMessengerKey, // ✅ 여기 중요!
       theme: ThemeData(
         colorSchemeSeed: const Color.fromARGB(255, 81, 0, 255),
