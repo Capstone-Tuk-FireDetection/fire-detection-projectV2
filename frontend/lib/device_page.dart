@@ -12,18 +12,18 @@ class DevicePage extends StatefulWidget {
 class _DevicePageState extends State<DevicePage> {
   late Future<Map<String, dynamic>> _future;
 
-  // 최근 끊김 표시용(서버의 last_offline_at 우선, 없으면 최초 감지시각 기록)
+  // 최근 끊김 표시용: 서버의 last_seen(마지막 접속 시각)을 우선 저장
   final Map<String, DateTime> _offlineAt = <String, DateTime>{};
 
   Timer? _pollTimer;
   Timer? _clockTimer;
-  Timer? _aiStatusTimer; // Added
+  Timer? _aiStatusTimer;
   static const _pollInterval = Duration(seconds: 20);
-  static const _aiStatusPollInterval = Duration(seconds: 5); // Added
+  static const _aiStatusPollInterval = Duration(seconds: 5);
 
-  String _aiStreamStatus = '확인 중...'; // Added
-  bool _isAiStreamRunning = false; // Added
-  bool _isAiActionPending = false; // Added
+  String _aiStreamStatus = '확인 중...';
+  bool _isAiStreamRunning = false;
+  bool _isAiActionPending = false;
 
   @override
   void initState() {
@@ -38,7 +38,7 @@ class _DevicePageState extends State<DevicePage> {
   void dispose() {
     _pollTimer?.cancel();
     _clockTimer?.cancel();
-    _aiStatusTimer?.cancel(); // Added
+    _aiStatusTimer?.cancel();
     super.dispose();
   }
 
@@ -49,7 +49,7 @@ class _DevicePageState extends State<DevicePage> {
 
   void _startClock() {
     _clockTimer?.cancel();
-    _clockTimer = Timer.periodic(const Duration(minutes: 1), (Timer timer) { // Modified
+    _clockTimer = Timer.periodic(const Duration(minutes: 1), (_) {
       if (mounted && _offlineAt.isNotEmpty) setState(() {});
     });
   }
@@ -68,19 +68,21 @@ class _DevicePageState extends State<DevicePage> {
       final devices = await ApiService.fetchDevices();
       if (!mounted) return;
 
-      // 서버 status/last_offline_at 기반으로 최근 끊김 갱신
+      // 서버 status / last_seen 기반으로 최근(오프라인) 목록 갱신
       final now = DateTime.now();
       for (final entry in devices.entries) {
         final name = entry.key;
         final info = (entry.value as Map<String, dynamic>? ?? {});
         final status = (info['status'] ?? '').toString().toLowerCase();
-        final lastOffIso = info['last_offline_at'] as String?;
-        final lastOff = _parseIso(lastOffIso);
+
+        // ★ last_seen 사용: "마지막까지 있었던 시각"
+        final lastSeenIso = info['last_seen'] as String?;
+        final lastSeen = _parseIso(lastSeenIso);
 
         if (status == 'offline') {
-          _offlineAt[name] = lastOff ?? _offlineAt[name] ?? now;
+          _offlineAt[name] = lastSeen ?? _offlineAt[name] ?? now;
         } else {
-          _offlineAt.remove(name); // 온라인이면 최근 끊김 목록에서 제거
+          _offlineAt.remove(name); // 온라인이면 최근 목록에서 제거
         }
       }
 
@@ -120,7 +122,7 @@ class _DevicePageState extends State<DevicePage> {
   }
 
   Future<void> _toggleAiStream() async {
-    if (_isAiActionPending) return; // Prevent multiple clicks
+    if (_isAiActionPending) return;
 
     setState(() {
       _isAiActionPending = true;
@@ -130,23 +132,23 @@ class _DevicePageState extends State<DevicePage> {
     try {
       if (_isAiStreamRunning) {
         await ApiService.stopAiStream();
-        _aiStatusTimer?.cancel(); // ★ AI 상태 폴링 중단
-        _startPolling(); // ★ 장치 목록 폴링 재개
-        if (!mounted) return; // Guard
+        _aiStatusTimer?.cancel();
+        _startPolling();
+        if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('AI 스트림을 중지했습니다.')),
         );
       } else {
         await ApiService.startAiStream();
-        _startAiStatusPolling(); // ★ AI 상태 폴링 시작
-        _pollTimer?.cancel(); // ★ 장치 목록 폴링 중단
-        if (!mounted) return; // Guard
+        _startAiStatusPolling();
+        _pollTimer?.cancel();
+        if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('AI 스트림을 시작했습니다.')),
         );
       }
     } catch (e) {
-      if (!mounted) return; // Guard
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('AI 스트림 제어 오류: $e')),
       );
@@ -155,7 +157,7 @@ class _DevicePageState extends State<DevicePage> {
         setState(() {
           _isAiActionPending = false;
         });
-        _checkAiStreamStatus(); // Refresh status after action
+        _checkAiStreamStatus();
       }
     }
   }
@@ -163,10 +165,10 @@ class _DevicePageState extends State<DevicePage> {
   String _timeAgo(DateTime when) {
     final diff = DateTime.now().difference(when);
     if (diff.inMinutes < 1) return '방금 전';
-    if (diff.inMinutes < 60) return '${diff.inMinutes}분 전'; // Modified
+    if (diff.inMinutes < 60) return '${diff.inMinutes}분 전';
     final h = diff.inHours, m = diff.inMinutes % 60;
-    if (m == 0) return '$h시간 전'; // Modified
-    return '$h시간 $m분 전'; // Modified
+    if (m == 0) return '$h시간 전';
+    return '$h시간 $m분 전';
   }
 
   @override
@@ -247,7 +249,7 @@ class _DevicePageState extends State<DevicePage> {
 
               const SizedBox(height: 16),
 
-              // ===== 온라인 기기 =====
+              // ===== 연결된 기기 =====
               Card(
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                 child: Padding(
@@ -292,7 +294,7 @@ class _DevicePageState extends State<DevicePage> {
 
               const SizedBox(height: 16),
 
-              // ===== 최근 끊긴 장치 =====
+              // ===== 최근 장치 (오프라인) =====
               Card(
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                 child: Padding(
@@ -304,23 +306,31 @@ class _DevicePageState extends State<DevicePage> {
                         children: const [
                           Icon(Icons.history),
                           SizedBox(width: 8),
-                          Text('최근 끊긴 장치', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+                          Text('최근 장치', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
                         ],
                       ),
                       const SizedBox(height: 8),
                       if (offlineList.isEmpty)
                         const Padding(
                           padding: EdgeInsets.symmetric(vertical: 8),
-                          child: Text('최근 끊긴 장치가 없습니다.', style: TextStyle(color: Colors.grey)),
+                          child: Text('최근 장치가 없습니다.', style: TextStyle(color: Colors.grey)),
                         )
                       else
                         ...offlineList.map((e) {
-                          final when = e.value;
+                          final name = e.key;
+                          final whenFallback = e.value;
+                          final info = (devices[name] as Map<String, dynamic>? ?? {});
+                          final ip = (info['ip'] ?? '').toString();
+                          // 서버 last_seen(있으면 우선) → 없으면 우리가 저장한 값
+                          final lastSeen = _parseIso(info['last_seen'] as String?) ?? whenFallback;
+
                           return ListTile(
                             dense: true,
                             leading: const Icon(Icons.videocam_off),
-                            title: Text(_timeAgo(when)),
-                            subtitle: Text(_timeAgo(when)),
+                            title: Text(name), // 이름
+                            subtitle: Text(
+                              ip.isNotEmpty ? '$ip · ${_timeAgo(lastSeen)}' : _timeAgo(lastSeen),
+                            ), // IP + 마지막 접속(~~분 전)
                             trailing: const Icon(Icons.circle, size: 10, color: Colors.grey),
                           );
                         }),
