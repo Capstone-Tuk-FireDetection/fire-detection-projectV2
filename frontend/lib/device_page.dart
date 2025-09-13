@@ -18,6 +18,13 @@ class _DevicePageState extends State<DevicePage> {
   Timer? _pollTimer;
   Timer? _clockTimer;
   Timer? _aiStatusTimer;
+
+  // 수동 스캔 진행 상태/타이머 (하단 배너 표시용)
+  bool _isRescanning = false;
+  Timer? _rescanTimer;
+  static const _rescanPollInterval = Duration(seconds: 2);
+  static const _rescanDuration = Duration(seconds: 20); // 스캔 기간 동안만 빠르게 폴링
+
   static const _pollInterval = Duration(seconds: 20);
   static const _aiStatusPollInterval = Duration(seconds: 5);
 
@@ -39,6 +46,7 @@ class _DevicePageState extends State<DevicePage> {
     _pollTimer?.cancel();
     _clockTimer?.cancel();
     _aiStatusTimer?.cancel();
+    _rescanTimer?.cancel();
     super.dispose();
   }
 
@@ -75,7 +83,7 @@ class _DevicePageState extends State<DevicePage> {
         final info = (entry.value as Map<String, dynamic>? ?? {});
         final status = (info['status'] ?? '').toString().toLowerCase();
 
-        // ★ last_seen 사용: "마지막까지 있었던 시각"
+        // last_seen 사용: "마지막까지 있었던 시각"
         final lastSeenIso = info['last_seen'] as String?;
         final lastSeen = _parseIso(lastSeenIso);
 
@@ -96,6 +104,34 @@ class _DevicePageState extends State<DevicePage> {
         });
       }
     }
+  }
+
+  // 수동 스캔 트리거 (+ 버튼)
+  Future<void> _rescanForNewDevices() async {
+    if (_isRescanning) return;
+    setState(() => _isRescanning = true);
+
+    try {
+      await ApiService.rescanDevices(); // 서버 측 network_scanner 비동기 실행
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('새 기기 검색 시작 실패: $e')),
+      );
+      setState(() => _isRescanning = false);
+      return;
+    }
+
+    // 스캔 기간 동안 빠르게 폴링
+    _rescanTimer?.cancel();
+    final startedAt = DateTime.now();
+    _rescanTimer = Timer.periodic(_rescanPollInterval, (t) async {
+      await _refreshDevices();
+      if (DateTime.now().difference(startedAt) >= _rescanDuration) {
+        t.cancel();
+        if (mounted) setState(() => _isRescanning = false);
+      }
+    });
   }
 
   void _startAiStatusPolling() {
@@ -171,9 +207,31 @@ class _DevicePageState extends State<DevicePage> {
     return '$h시간 $m분 전';
   }
 
+  // 하단 고정 배너 위젯
+  Widget _buildBottomRescanBanner(BuildContext context) {
+    return SafeArea(
+      minimum: const EdgeInsets.only(left: 16, right: 16, bottom: 16),
+      child: Material(
+        elevation: 6,
+        borderRadius: BorderRadius.circular(12),
+        color: Theme.of(context).colorScheme.surface,
+        child: const ListTile(
+          leading: SizedBox(
+            width: 20,
+            height: 20,
+            child: CircularProgressIndicator(strokeWidth: 2),
+          ),
+          title: Text('새로운 기기 검색중…'),
+          dense: true,
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    return RefreshIndicator(
+    // 메인 콘텐츠 (ListView 포함)
+    final content = RefreshIndicator(
       onRefresh: _refreshDevices,
       child: FutureBuilder<Map<String, dynamic>>(
         future: _future,
@@ -263,6 +321,12 @@ class _DevicePageState extends State<DevicePage> {
                           const SizedBox(width: 8),
                           const Text('연결된 기기', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
                           const Spacer(),
+                          // 새 기기 스캔(등록) 버튼
+                          IconButton(
+                            tooltip: '새 기기 검색',
+                            onPressed: _isRescanning ? null : _rescanForNewDevices,
+                            icon: const Icon(Icons.add),
+                          ),
                           IconButton(
                             tooltip: '새로고침',
                             onPressed: _refreshDevices,
@@ -321,16 +385,13 @@ class _DevicePageState extends State<DevicePage> {
                           final whenFallback = e.value;
                           final info = (devices[name] as Map<String, dynamic>? ?? {});
                           final ip = (info['ip'] ?? '').toString();
-                          // 서버 last_seen(있으면 우선) → 없으면 우리가 저장한 값
                           final lastSeen = _parseIso(info['last_seen'] as String?) ?? whenFallback;
 
                           return ListTile(
                             dense: true,
                             leading: const Icon(Icons.videocam_off),
-                            title: Text(name), // 이름
-                            subtitle: Text(
-                              ip.isNotEmpty ? '$ip · ${_timeAgo(lastSeen)}' : _timeAgo(lastSeen),
-                            ), // IP + 마지막 접속(~~분 전)
+                            title: Text(name),
+                            subtitle: Text(ip.isNotEmpty ? '$ip · ${_timeAgo(lastSeen)}' : _timeAgo(lastSeen)),
                             trailing: const Icon(Icons.circle, size: 10, color: Colors.grey),
                           );
                         }),
@@ -346,10 +407,23 @@ class _DevicePageState extends State<DevicePage> {
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Colors.grey),
                 ),
               ),
+              const SizedBox(height: 80), // 하단 배너와 겹치지 않도록 여유 공간
             ],
           );
         },
       ),
+    );
+
+    // 하단 고정 배너를 오버레이로 노출
+    return Stack(
+      children: [
+        content,
+        if (_isRescanning)
+          Align(
+            alignment: Alignment.bottomCenter,
+            child: _buildBottomRescanBanner(context),
+          ),
+      ],
     );
   }
 }

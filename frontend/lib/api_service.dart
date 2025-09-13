@@ -25,7 +25,7 @@ class ApiService {
     }
     throw Exception('Failed to load devices: ${res.statusCode}');
   }
-
+    
   /// flame 값(0/1/-1)
   static Future<int> fetchFlame() async {
     final uri = Uri.parse('$backendBaseUrl/flame/espcam1');
@@ -66,4 +66,13 @@ class ApiService {
         }
         throw Exception('Failed to get AI stream status: ${res.statusCode} ${res.body}');
       }
+      
+      static Future<void> rescanDevices() async {
+        final uri = Uri.parse('$backendBaseUrl/rescan_devices');
+        final res = await _client.post(uri);
+        if (res.statusCode < 200 || res.statusCode >= 300) {
+          throw Exception('Rescan failed: ${res.statusCode}');
+        }
+      }
+
     }
