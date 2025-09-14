@@ -14,6 +14,9 @@ import sys
 # ★ 추가
 from datetime import datetime, timezone
 from google.cloud import firestore as gcf 
+# 상단 import에 추가
+from flask import send_from_directory
+
 
 ai_process = None
 
@@ -33,7 +36,12 @@ lock = threading.Lock()
 
 # ★ 추가: 온라인 판정 TTL(초). TTL 초 동안 하트비트 없으면 offline 처리
 ONLINE_TTL_SEC = 45
-
+ALERT_IMG_DIR = os.path.join(script_dir, "alert_images")
+os.makedirs(ALERT_IMG_DIR, exist_ok=True)
+# 이미지 서빙 라우트 추가
+@app.route("/alert_image/<name>")
+def alert_image(name):
+    return send_from_directory(ALERT_IMG_DIR, name, mimetype="image/jpeg", as_attachment=False)
 
 # --- 🔽 [추가] 네트워크 탐색 기능 🔽 ---
 
@@ -443,8 +451,45 @@ def snapshot_device(device):
         print(f"  - ❌ Snapshot request to ESP32 failed: {e}")
         return Response(f"Failed to get snapshot from {device}", status=503)
 
+def _save_alert_snapshot(device_name: str):
+    """장치의 /jpg를 받아 로컬에 저장하고, 성공 시 상대 경로(/alert_image/...) 리턴."""
+    try:
+        doc = db.collection('devices').document(device_name).get()
+        if not doc.exists:
+            return None
+        info = doc.to_dict() or {}
+        ip = info.get('ip')
+        if not ip:
+            return None
 
-# ✅ 알림 수신 API
+        # ESP에서 바로 한 장 가져오기
+        r = requests.get(f"http://{ip}/jpg", timeout=2)
+        if r.status_code != 200:
+            return None
+
+        # 파일명: device_타임스탬프.jpg
+        fname = f"{device_name}_{int(time.time())}.jpg"
+        fpath = os.path.join(ALERT_IMG_DIR, fname)
+        with open(fpath, "wb") as f:
+            f.write(r.content)
+
+        # 프론트엔드는 backendBaseUrl + 이 경로로 접근
+        return f"/alert_image/{fname}"
+    except Exception as e:
+        print("⚠️ snapshot save error:", e)
+        return None
+
+
+def _attach_image_async(alert_id: str, device_name: str):
+    """비동기로 스냅샷 저장 → 성공 시 해당 알림 문서에 image_url 업데이트."""
+    url = _save_alert_snapshot(device_name)
+    if url:
+        try:
+            db.collection('alerts').document(alert_id).update({'image_url': url})
+        except Exception as e:
+            print("⚠️ failed to update alert with image_url:", e)
+
+
 @app.route("/alert", methods=["POST"])
 def alert():
     data = request.get_json()
@@ -454,17 +499,27 @@ def alert():
         body = f"🔥 {device} 장치에서 불꽃이 감지되었습니다."
         print(f"🔥 불꽃 감지됨! [디바이스: {device}]")
 
-        # ★ Firestore에 기록
-        db.collection('alerts').add({
+        # 1) 알림 먼저 저장 (image_url 없이)
+        doc_ref = db.collection('alerts').document()
+        doc_ref.set({
             'device': device,
             'title': title,
             'body': body,
             'flame': 1,
             'created_at': firestore.SERVER_TIMESTAMP,
+            # 'image_url': 나중에 비동기로 붙임
         })
 
+        # 2) 비동기로 스냅샷 저장 후 image_url 업데이트
+        threading.Thread(target=_attach_image_async, args=(doc_ref.id, device), daemon=True).start()
+
+        # 3) FCM 발송은 기존 그대로
         send_fcm_notification_to_all(title, body)
     return jsonify({"received": True})
+
+
+
+
 
 def _parse_iso_or_none(s):
     if not s:
@@ -502,6 +557,7 @@ def list_alerts():
             "title": d.get("title"),
             "body": d.get("body"),
             "flame": d.get("flame"),
+            "image_url": d.get("image_url"), 
             "created_at": created.isoformat() if created else None,
         })
     return jsonify(items)
@@ -520,17 +576,40 @@ def delete_alerts():
         q = q.where('device', '==', device)
 
     deleted = 0
-    # Firestore 제한 고려: 한 번에 너무 많이 지우지 말고 chunk로
     CHUNK = 200
     while deleted < limit:
-        chunk = list(q.limit(min(CHUNK, limit - deleted)).stream())
+        # 정렬을 넣어 주면 페이지네이션/반복 삭제 시 더 안정적
+        chunk = list(q.order_by('created_at', direction=gcf.Query.DESCENDING)
+                       .limit(min(CHUNK, limit - deleted)).stream())
         if not chunk:
             break
-        for doc in chunk:
-            doc.reference.delete()
+
+        for snap in chunk:
+            d = snap.to_dict() or {}
+            image_url = (d.get('image_url') or "").strip()
+
+            # /alert_image/<파일명> 형태만 처리
+            if image_url.startswith("/alert_image/"):
+                name = os.path.basename(image_url.replace("/alert_image/", "", 1))
+                if name:
+                    try:
+                        os.remove(os.path.join(ALERT_IMG_DIR, name))
+                    except FileNotFoundError:
+                        # 이미 없는 경우는 무시
+                        pass
+                    except Exception as e:
+                        print(f"⚠️ image delete failed: {name} -> {e}")
+
+            # Firestore 문서 삭제
+            try:
+                snap.reference.delete()
+            except Exception as e:
+                print("⚠️ delete doc failed:", e)
+
         deleted += len(chunk)
 
     return jsonify({"deleted": deleted})
+
 
 
 @app.route("/start_ai_stream", methods=["POST"])

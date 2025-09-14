@@ -88,7 +88,10 @@ class ApiService {
           throw Exception('Rescan failed: ${res.statusCode}');
         }
       }
-
+      static String absolutizeUrl(String url) {
+    if (url.startsWith('http://') || url.startsWith('https://')) return url;
+    return '$backendBaseUrl$url';
+  }
     // 최근 알람 조회
     static Future<List<Map<String, dynamic>>> fetchAlerts({int limit = 50, String? device}) async {
       final qp = <String, String>{"limit": "$limit"};

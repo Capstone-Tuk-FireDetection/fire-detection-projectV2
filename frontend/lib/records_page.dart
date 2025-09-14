@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'api_service.dart';
+import 'constants.dart'; // backendBaseUrl
 
 class RecordsPage extends StatefulWidget {
   const RecordsPage({super.key});
@@ -93,6 +94,14 @@ class _RecordsPageState extends State<RecordsPage> {
     return '$h시간 $m분 전';
   }
 
+  void _openImageViewer(String fullUrl, String title) {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => AlertImageViewerPage(imageUrl: fullUrl, title: title),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return RefreshIndicator(
@@ -125,7 +134,6 @@ class _RecordsPageState extends State<RecordsPage> {
             return ListView(
               padding: const EdgeInsets.all(16),
               children: [
-                // 상단 툴바 + 비어있음 표시
                 Row(
                   children: [
                     Text('최근 알람 0건', style: Theme.of(context).textTheme.titleMedium),
@@ -150,7 +158,6 @@ class _RecordsPageState extends State<RecordsPage> {
             itemCount: items.length + 2, // 헤더/구분선 위해 +2
             separatorBuilder: (_, __) => const Divider(height: 0),
             itemBuilder: (context, i) {
-              // 0: 헤더, 1..n: 아이템, 마지막: 빈 공간
               if (i == 0) {
                 return Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
@@ -179,19 +186,66 @@ class _RecordsPageState extends State<RecordsPage> {
               final title = (it['title'] ?? '알림').toString();
               final body = (it['body'] ?? '').toString();
 
+              // 👇 image_url이 있으면 전체 URL 조합
+              final imgPath = (it['image_url'] ?? '').toString();
+              final imgUrl = imgPath.isNotEmpty ? '$backendBaseUrl$imgPath' : null;
+
               return ListTile(
                 leading: const Icon(Icons.local_fire_department, color: Colors.red),
                 title: Text('$title — $device'),
                 subtitle: Text('$body\n${_timeAgo(when)}'),
                 isThreeLine: true,
-                trailing: Text(
-                  TimeOfDay.fromDateTime(when).format(context),
-                  style: Theme.of(context).textTheme.bodySmall,
+                trailing: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      TimeOfDay.fromDateTime(when).format(context),
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                    if (imgUrl != null) ...[
+                      const SizedBox(width: 8),
+                      OutlinedButton.icon(
+                        icon: const Icon(Icons.photo),
+                        label: const Text('사진'),
+                        onPressed: () => _openImageViewer(imgUrl, '$title — $device'),
+                      ),
+                    ]
+                  ],
                 ),
+                // 리스트 아이템 자체를 눌러도 열기
+                onTap: imgUrl != null ? () => _openImageViewer(imgUrl, '$title — $device') : null,
               );
             },
           );
         },
+      ),
+    );
+  }
+}
+
+class AlertImageViewerPage extends StatelessWidget {
+  final String imageUrl;
+  final String title;
+  const AlertImageViewerPage({super.key, required this.imageUrl, required this.title});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: Text(title, overflow: TextOverflow.ellipsis)),
+      body: Center(
+        child: InteractiveViewer(
+          child: Image.network(
+            imageUrl,
+            fit: BoxFit.contain,
+            loadingBuilder: (context, child, progress) {
+              if (progress == null) return child;
+              return const Center(child: CircularProgressIndicator());
+            },
+            errorBuilder: (context, err, st) {
+              return const Center(child: Text('이미지를 불러오지 못했습니다.'));
+            },
+          ),
+        ),
       ),
     );
   }
