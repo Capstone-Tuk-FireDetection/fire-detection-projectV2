@@ -12,6 +12,7 @@ class _RecordsPageState extends State<RecordsPage> {
   late Future<List<Map<String, dynamic>>> _future;
   Timer? _poll;
   static const _pollInterval = Duration(seconds: 20);
+  bool _deleting = false;
 
   @override
   void initState() {
@@ -38,6 +39,39 @@ class _RecordsPageState extends State<RecordsPage> {
       setState(() {
         _future = Future.error(e);
       });
+    }
+  }
+
+  Future<void> _confirmAndDeleteAll() async {
+    if (_deleting) return;
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('전체 삭제'),
+        content: const Text('최근 알람 기록을 모두 삭제하시겠어요?\n이 작업은 되돌릴 수 없습니다.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('취소')),
+          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('삭제')),
+        ],
+      ),
+    );
+    if (ok != true) return;
+
+    setState(() => _deleting = true);
+    try {
+      final deleted = await ApiService.deleteAlerts(); // 전체 삭제
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('삭제됨: $deleted건')),
+      );
+      await _refresh();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('삭제 실패: $e')),
+      );
+    } finally {
+      if (mounted) setState(() => _deleting = false);
     }
   }
 
@@ -90,19 +124,56 @@ class _RecordsPageState extends State<RecordsPage> {
           if (items.isEmpty) {
             return ListView(
               padding: const EdgeInsets.all(16),
-              children: const [
-                SizedBox(height: 12),
-                Center(child: Text('최근 알람이 없습니다.', style: TextStyle(color: Colors.grey))),
+              children: [
+                // 상단 툴바 + 비어있음 표시
+                Row(
+                  children: [
+                    Text('최근 알람 0건', style: Theme.of(context).textTheme.titleMedium),
+                    const Spacer(),
+                    IconButton(
+                      onPressed: _deleting ? null : _confirmAndDeleteAll,
+                      icon: _deleting
+                          ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                          : const Icon(Icons.delete_forever),
+                      tooltip: '전체 삭제',
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                const Center(child: Text('최근 알람이 없습니다.', style: TextStyle(color: Colors.grey))),
               ],
             );
           }
 
           return ListView.separated(
             padding: const EdgeInsets.all(8),
-            itemCount: items.length,
+            itemCount: items.length + 2, // 헤더/구분선 위해 +2
             separatorBuilder: (_, __) => const Divider(height: 0),
             itemBuilder: (context, i) {
-              final it = items[i];
+              // 0: 헤더, 1..n: 아이템, 마지막: 빈 공간
+              if (i == 0) {
+                return Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                  child: Row(
+                    children: [
+                      Text('최근 알람 ${items.length}건', style: Theme.of(context).textTheme.titleMedium),
+                      const Spacer(),
+                      IconButton(
+                        onPressed: _deleting ? null : _confirmAndDeleteAll,
+                        icon: _deleting
+                            ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                            : const Icon(Icons.delete_forever),
+                        tooltip: '전체 삭제',
+                      ),
+                    ],
+                  ),
+                );
+              }
+              if (i == items.length + 1) {
+                return const SizedBox(height: 12);
+              }
+
+              final it = items[i - 1];
               final when = _parseIso(it['created_at'] as String?) ?? DateTime.now();
               final device = (it['device'] ?? '(unknown)').toString();
               final title = (it['title'] ?? '알림').toString();

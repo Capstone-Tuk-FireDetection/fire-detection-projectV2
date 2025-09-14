@@ -34,7 +34,7 @@ class _HomeScreenState extends State<HomeScreen> {
         selectedIndex: _idx,
         destinations: const [
           NavigationDestination(icon: Icon(Icons.sensors), label: '장치'),
-          NavigationDestination(icon: Icon(Icons.videocam), label: '영상'),
+          NavigationDestination(icon: Icon(Icons.videocam), label: '화면'),
           NavigationDestination(icon: Icon(Icons.history), label: '기록'), // ★ 추가
           NavigationDestination(icon: Icon(Icons.person), label: '사용자'),
         ],

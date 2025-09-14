@@ -101,6 +101,19 @@ class ApiService {
       }
       throw Exception('Failed to load alerts (${res.statusCode})');
     }
+      // 전체/부분(디바이스별) 알람 삭제
+  static Future<int> deleteAlerts({String? device, int? limit}) async {
+    final qp = <String, String>{};
+    if (device != null && device.isNotEmpty) qp['device'] = device;
+    if (limit != null) qp['limit'] = '$limit';
+    final uri = Uri.parse('$backendBaseUrl/alerts').replace(queryParameters: qp);
+    final res = await _client.delete(uri);
+    if (res.statusCode == 200) {
+      final data = jsonDecode(res.body) as Map<String, dynamic>;
+      return (data['deleted'] as num?)?.toInt() ?? 0;
+    }
+    throw Exception('Failed to delete alerts (${res.statusCode})');
+  }
 
 
 

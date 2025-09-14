@@ -32,7 +32,7 @@ class _DevicePageState extends State<DevicePage> {
   bool _isAiStreamRunning = false;
   bool _isAiActionPending = false;
 
-  // ▶ 추가: 판독 소스 선택(기본 둘 다 켜둠)
+  // ▶ 판독 소스 선택(기본 둘 다 켜둠)
   bool _useAI = true;
   bool _useSensor = true;
 
@@ -43,6 +43,7 @@ class _DevicePageState extends State<DevicePage> {
     _startPolling();
     _startClock();
     _checkAiStreamStatus(); // 페이지 로드 시 상태 1회 확인
+    _refreshDevices(); // ★ 첫 진입 즉시 1회 새로고침하여 _offlineAt 프라임
   }
 
   @override
@@ -226,7 +227,6 @@ class _DevicePageState extends State<DevicePage> {
         );
       } else {
         try {
-          // ★ 체크박스 선택 사항을 서버로 전달 (api_service.dart에서 반영 필요)
           final res = await ApiService.startAiStream(
             useAI: _useAI,
             useSensor: _useSensor,
@@ -333,8 +333,25 @@ class _DevicePageState extends State<DevicePage> {
             }
           }
 
-          final offlineList = _offlineAt.entries.toList()
-            ..sort((a, b) => (b.value).compareTo(a.value)); // 최근 끊김 우선
+          // ★ 폴백: 아직 _offlineAt이 비어 있으면 현재 스냅샷으로 1회성 계산
+          List<MapEntry<String, DateTime>> offlineList;
+          if (_offlineAt.isEmpty) {
+            final now = DateTime.now();
+            final tmp = <String, DateTime>{};
+            for (final e in devices.entries) {
+              final info = (e.value as Map<String, dynamic>? ?? {});
+              final status = (info['status'] ?? '').toString().toLowerCase();
+              if (status == 'offline') {
+                final lastSeen = _parseIso(info['last_seen'] as String?) ?? now;
+                tmp[e.key] = lastSeen;
+              }
+            }
+            offlineList = tmp.entries.toList()
+              ..sort((a, b) => b.value.compareTo(a.value));
+          } else {
+            offlineList = _offlineAt.entries.toList()
+              ..sort((a, b) => b.value.compareTo(a.value)); // 최근 끊김 우선
+          }
 
           return ListView(
             padding: const EdgeInsets.all(16),
@@ -360,7 +377,7 @@ class _DevicePageState extends State<DevicePage> {
 
                       const SizedBox(height: 12),
 
-                      // ▶ 추가: 판독 소스 선택 체크박스들
+                      // 판독 소스 선택 체크박스들
                       CheckboxListTile(
                         contentPadding: EdgeInsets.zero,
                         dense: true,

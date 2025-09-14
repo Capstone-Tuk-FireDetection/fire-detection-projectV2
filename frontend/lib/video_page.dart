@@ -76,47 +76,58 @@ class _VideoPageState extends State<VideoPage> {
         // 온라인 장치가 하나도 없을 때
         if (_selected == null) {
           return Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.center, // 항상 중앙
             children: [
               const SizedBox(height: 16),
               const Text('현재 온라인인 장치가 없습니다.'),
               const SizedBox(height: 8),
-              TextButton.icon(
-                onPressed: () {
-                  setState(() => _devicesF = ApiService.fetchDevices());
-                },
-                icon: const Icon(Icons.refresh),
-                label: const Text('새로고침'),
+              Align(
+                alignment: Alignment.center,
+                child: TextButton.icon(
+                  onPressed: () {
+                    setState(() => _devicesF = ApiService.fetchDevices());
+                  },
+                  icon: const Icon(Icons.refresh),
+                  label: const Text('새로고침'),
+                ),
               ),
             ],
           );
         }
 
         return Column(
+          crossAxisAlignment: CrossAxisAlignment.center, // ★ 가로 중앙 정렬 고정
           children: [
             // ───── 장치 선택 ─────
             Padding(
               padding: const EdgeInsets.all(8),
-              child: DropdownButtonHideUnderline(
-                child: DropdownButton<String>(
-                  value: _selected,
-                  items: devices
-                      .map((d) => DropdownMenuItem(
-                            value: d,
-                            child: Row(
-                              children: [
-                                const Icon(Icons.videocam, size: 16),
-                                const SizedBox(width: 8),
-                                Text(d),
-                              ],
-                            ),
-                          ))
-                      .toList(),
-                  onChanged: (val) {
-                    setState(() {
-                      _selected = val;
-                      _snapshotUrl = null; // 장치 변경 시 이미지 초기화
-                    });
-                  },
+              child: Align(
+                alignment: Alignment.center, // ★ 드롭다운 자체를 중앙
+                child: DropdownButtonHideUnderline(
+                  child: DropdownButton<String>(
+                    alignment: Alignment.center, // ★ 메뉴/라벨 정렬
+                    value: _selected,
+                    items: devices
+                        .map((d) => DropdownMenuItem(
+                              value: d,
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  const Icon(Icons.videocam, size: 16),
+                                  const SizedBox(width: 8),
+                                  Text(d),
+                                ],
+                              ),
+                            ))
+                        .toList(),
+                    onChanged: (val) {
+                      setState(() {
+                        _selected = val;
+                        _snapshotUrl = null; // 장치 변경 시 이미지 초기화
+                      });
+                    },
+                  ),
                 ),
               ),
             ),
@@ -154,16 +165,22 @@ class _VideoPageState extends State<VideoPage> {
             // ───── 새로고침 버튼 ─────
             Padding(
               padding: const EdgeInsets.only(bottom: 12),
-              child: FloatingActionButton.extended(
-                onPressed: _isLoading ? null : _refreshSnapshot,
-                icon: _isLoading
-                    ? const SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Icon(Icons.refresh),
-                label: const Text('새로고침'),
+              child: Align(
+                alignment: Alignment.center, // ★ 버튼 중앙 고정
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(minWidth: 160), // ★ 폭 고정(선택)
+                  child: FloatingActionButton.extended(
+                    onPressed: _isLoading ? null : _refreshSnapshot,
+                    icon: _isLoading
+                        ? const SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.refresh),
+                    label: const Text('새로고침'),
+                  ),
+                ),
               ),
             ),
           ],

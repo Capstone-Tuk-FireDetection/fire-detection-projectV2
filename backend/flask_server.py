@@ -506,6 +506,32 @@ def list_alerts():
         })
     return jsonify(items)
 
+@app.route("/alerts", methods=["DELETE"])
+def delete_alerts():
+    # /alerts?device=espcam1&limit=500
+    device = request.args.get("device")
+    try:
+        limit = int(request.args.get("limit", "500"))  # 안전을 위해 기본 500개만
+    except ValueError:
+        limit = 500
+
+    q = db.collection('alerts')
+    if device:
+        q = q.where('device', '==', device)
+
+    deleted = 0
+    # Firestore 제한 고려: 한 번에 너무 많이 지우지 말고 chunk로
+    CHUNK = 200
+    while deleted < limit:
+        chunk = list(q.limit(min(CHUNK, limit - deleted)).stream())
+        if not chunk:
+            break
+        for doc in chunk:
+            doc.reference.delete()
+        deleted += len(chunk)
+
+    return jsonify({"deleted": deleted})
+
 
 @app.route("/start_ai_stream", methods=["POST"])
 def start_ai_stream():
