@@ -513,17 +513,23 @@ def start_ai_stream():
     if ai_process and ai_process.poll() is None:
         return jsonify({"status": "AI stream already running"}), 200
 
-    # 요청 바디에서 device_name(optional) 받기. 없거나 "auto"면 자동 선택
     data = request.get_json(silent=True) or {}
     req_device = (data.get("device_name") or "").strip()
 
-    # 온라인 장치 자동 선택
+    # ▶ 추가: 판독 소스 플래그 (기본값: 둘 다 True)
+    use_ai = bool(data.get("use_ai", True))
+    use_sensor = bool(data.get("use_sensor", True))
+
+    # ▶ 추가: 둘 다 해제면 시작 거절
+    if not (use_ai or use_sensor):
+        return jsonify({"error": "at least one of use_ai/use_sensor must be true"}), 400
+
+    # --- (기존) 온라인 장치 자동/검증 로직 그대로 ---
     if not req_device or req_device.lower() == "auto":
         chosen = _pick_online_device_name()
         if not chosen:
             return jsonify({"error": "no online devices"}), 409
     else:
-        # 특정 장치가 지정된 경우, 온라인 여부 확인
         doc = db.collection('devices').document(req_device).get()
         if not doc.exists:
             return jsonify({"error": f"device '{req_device}' not found"}), 404
@@ -540,14 +546,16 @@ def start_ai_stream():
         if not os.path.exists(ai_script_path):
             return jsonify({"error": f"AI script not found at {ai_script_path}"}), 500
 
-        # 서버의 실제 접근 가능한 URL 사용 (로컬 IP)
         server_url = f"http://{get_local_ip()}:8080"
 
+        # ▶ 추가: 인자로 플래그 넘김 (--use_ai/--use_sensor)
         command = [
             sys.executable,
             ai_script_path,
             "--device_name", chosen,
-            "--server_url", server_url
+            "--server_url", server_url,
+            "--use_ai", "1" if use_ai else "0",
+            "--use_sensor", "1" if use_sensor else "0",
         ]
 
         popen_kwargs = {}
@@ -555,11 +563,12 @@ def start_ai_stream():
             popen_kwargs['creationflags'] = subprocess.CREATE_NEW_CONSOLE
 
         ai_process = subprocess.Popen(command, **popen_kwargs)
-        print(f"✅ AI stream started with PID: {ai_process.pid} (device: {chosen})")
+        print(f"✅ AI stream started with PID: {ai_process.pid} (device: {chosen}, use_ai={use_ai}, use_sensor={use_sensor})")
         return jsonify({"status": "AI stream started", "pid": ai_process.pid, "device_name": chosen}), 200
     except Exception as e:
         print(f"❌ Failed to start AI stream: {e}")
         return jsonify({"error": f"Failed to start AI stream: {str(e)}"}), 500
+
 
 
 @app.route("/stop_ai_stream", methods=["POST"])

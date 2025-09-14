@@ -40,15 +40,29 @@ class ApiService {
         static String snapshotUrl([String? device]) =>
           device == null ? '$backendBaseUrl/snapshot' : '$backendBaseUrl/snapshot/$device';
 
-      static Future<Map<String, dynamic>> startAiStream() async {
-        final uri = Uri.parse('$backendBaseUrl/start_ai_stream');
-        final res = await _client.post(uri);
-        if (res.statusCode == 200) {
-          return jsonDecode(res.body) as Map<String, dynamic>;
+        static Future<Map<String, dynamic>> startAiStream({
+          required bool useAI,
+          required bool useSensor,
+          String deviceName = "auto",
+        }) async {
+          final uri = Uri.parse('$backendBaseUrl/start_ai_stream');
+          final body = jsonEncode({
+            "device_name": deviceName, // "auto"면 서버가 온라인 장치 자동 선택
+            "use_ai": useAI,
+            "use_sensor": useSensor,
+          });
+          final res = await _client.post(
+            uri,
+            headers: {"Content-Type": "application/json"},
+            body: body,
+          );
+          if (res.statusCode == 200) {
+            return jsonDecode(res.body) as Map<String, dynamic>;
+          }
+          throw Exception('Failed to start AI stream: ${res.statusCode} ${res.body}');
         }
-        throw Exception('Failed to start AI stream: ${res.statusCode} ${res.body}');
-      }
 
+      
       static Future<Map<String, dynamic>> stopAiStream() async {
         final uri = Uri.parse('$backendBaseUrl/stop_ai_stream');
         final res = await _client.post(uri);

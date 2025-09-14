@@ -32,6 +32,10 @@ class _DevicePageState extends State<DevicePage> {
   bool _isAiStreamRunning = false;
   bool _isAiActionPending = false;
 
+  // ▶ 추가: 판독 소스 선택(기본 둘 다 켜둠)
+  bool _useAI = true;
+  bool _useSensor = true;
+
   @override
   void initState() {
     super.initState();
@@ -139,20 +143,41 @@ class _DevicePageState extends State<DevicePage> {
     _aiStatusTimer = Timer.periodic(_aiStatusPollInterval, (_) => _checkAiStreamStatus());
   }
 
-Future<void> _checkAiStreamStatus() async {
-  try {
-    final status = await ApiService.getAiStreamStatus();
-    if (!mounted) return;
+  Future<void> _checkAiStreamStatus() async {
+    try {
+      final status = await ApiService.getAiStreamStatus();
+      if (!mounted) return;
 
-    final running = status['status'] == 'running';
-    if (running) {
-      setState(() {
-        _aiStreamStatus = '실행 중 (PID: ${status['pid']})';
-        _isAiStreamRunning = true;
-      });
-    } else {
-      // ✅ 실행 중이 아니면 폴링 중단 + 장치 폴링 재개
-      final wasRunning = _isAiStreamRunning;
+      final running = status['status'] == 'running';
+      if (running) {
+        setState(() {
+          _aiStreamStatus = '실행 중 (PID: ${status['pid']})';
+          _isAiStreamRunning = true;
+        });
+      } else {
+        // 실행 중이 아니면 폴링 중단 + 장치 폴링 재개
+        final wasRunning = _isAiStreamRunning;
+        _aiStatusTimer?.cancel();
+        _aiStatusTimer = null;
+
+        if (_pollTimer == null || !_pollTimer!.isActive) {
+          _startPolling();
+        }
+
+        setState(() {
+          _aiStreamStatus = '중지됨';
+          _isAiStreamRunning = false;
+        });
+
+        if (wasRunning && mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('AI 스트림이 중지되었습니다.')),
+          );
+        }
+      }
+    } catch (_) {
+      if (!mounted) return;
+      // 오류 발생 시에도 폴링 무한루프 방지
       _aiStatusTimer?.cancel();
       _aiStatusTimer = null;
 
@@ -161,37 +186,29 @@ Future<void> _checkAiStreamStatus() async {
       }
 
       setState(() {
-        _aiStreamStatus = '중지됨';
+        _aiStreamStatus = '상태 확인 오류';
         _isAiStreamRunning = false;
       });
-
-      // 직전에 실행 중이었다가 멈춘 경우 한 번만 안내
-      if (wasRunning && mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('AI 스트림이 중지되었습니다.')),
-        );
-      }
     }
-  } catch (e) {
-    if (!mounted) return;
-    // ❗ 오류 발생 시에도 폴링 계속 돌리면 로그만 쌓이므로 중단
-    _aiStatusTimer?.cancel();
-    _aiStatusTimer = null;
-
-    if (_pollTimer == null || !_pollTimer!.isActive) {
-      _startPolling();
-    }
-
-    setState(() {
-      _aiStreamStatus = '상태 확인 오류';
-      _isAiStreamRunning = false;
-    });
   }
-}
 
+  String _currentModeLabel() {
+    if (_useAI && _useSensor) return '모드: AI + 센서';
+    if (_useAI) return '모드: AI만';
+    if (_useSensor) return '모드: 센서만';
+    return '모드: 선택 없음';
+  }
 
   Future<void> _toggleAiStream() async {
     if (_isAiActionPending) return;
+
+    // 시작할 때는 최소 하나 선택 필요 (둘 다 해제면 막음)
+    if (!_isAiStreamRunning && !(_useAI || _useSensor)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('AI 또는 불꽃센서 중 하나 이상 선택해야 시작할 수 있습니다.')),
+      );
+      return;
+    }
 
     setState(() {
       _isAiActionPending = true;
@@ -208,33 +225,34 @@ Future<void> _checkAiStreamStatus() async {
           const SnackBar(content: Text('AI 스트림을 중지했습니다.')),
         );
       } else {
-try {
-    final res = await ApiService.startAiStream(); // Map<String,dynamic> 반환 가정
-    // 서버가 online 장치를 자동 선택 → device_name 포함하여 안내
-    final chosen = res['device_name']?.toString();
-    if (!mounted) return;
+        try {
+          // ★ 체크박스 선택 사항을 서버로 전달 (api_service.dart에서 반영 필요)
+          final res = await ApiService.startAiStream(
+            useAI: _useAI,
+            useSensor: _useSensor,
+          ); // Map<String,dynamic> 반환 가정
 
-    if (chosen != null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('AI 스트림 시작: $chosen')),
-      );
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('AI 스트림을 시작했습니다.')),
-      );
-    }
+          final chosen = res['device_name']?.toString();
+          if (!mounted) return;
 
-    _startAiStatusPolling(); // 상태 폴링 시작
-    _pollTimer?.cancel();    // 장치 목록 폴링은 일시 중단
-  } catch (e) {
-    if (!mounted) return;
-    // 서버가 409(온라인 장치 없음/오프라인) 등으로 실패하면 여기로 옴
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('AI 스트림 시작 실패: $e')),
-    );
-    // 폴링은 중단하지 않음 (디바이스 목록 갱신 유지)
-  }
-}
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                chosen != null ? 'AI 스트림 시작: $chosen (${_currentModeLabel()})'
+                               : 'AI 스트림을 시작했습니다. (${_currentModeLabel()})',
+              ),
+            ),
+          );
+
+          _startAiStatusPolling(); // 상태 폴링 시작
+          _pollTimer?.cancel();    // 장치 목록 폴링은 일시 중단
+        } catch (e) {
+          if (!mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('AI 스트림 시작 실패: $e')),
+          );
+        }
+      }
     } finally {
       if (mounted) {
         setState(() {
@@ -336,11 +354,51 @@ try {
                           Text('AI 스트림 제어', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
                         ],
                       ),
+
                       const SizedBox(height: 8),
                       Text('상태: $_aiStreamStatus', style: const TextStyle(fontSize: 14)),
-                      const SizedBox(height: 16),
+
+                      const SizedBox(height: 12),
+
+                      // ▶ 추가: 판독 소스 선택 체크박스들
+                      CheckboxListTile(
+                        contentPadding: EdgeInsets.zero,
+                        dense: true,
+                        title: const Text('AI 사용'),
+                        value: _useAI,
+                        onChanged: _isAiStreamRunning
+                            ? null
+                            : (v) => setState(() => _useAI = v ?? false),
+                      ),
+                      CheckboxListTile(
+                        contentPadding: EdgeInsets.zero,
+                        dense: true,
+                        title: const Text('불꽃센서 사용'),
+                        value: _useSensor,
+                        onChanged: _isAiStreamRunning
+                            ? null
+                            : (v) => setState(() => _useSensor = v ?? false),
+                      ),
+
+                      // 현재 모드 라벨
+                      Padding(
+                        padding: const EdgeInsets.only(top: 4, bottom: 12),
+                        child: Text(
+                          _currentModeLabel(),
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
+                          ),
+                        ),
+                      ),
+
+                      // 시작/중지 버튼
                       ElevatedButton(
-                        onPressed: _isAiActionPending ? null : _toggleAiStream,
+                        onPressed: _isAiActionPending
+                            ? null
+                            : (_isAiStreamRunning
+                                ? _toggleAiStream
+                                : (_useAI || _useSensor) ? _toggleAiStream : null),
                         style: ElevatedButton.styleFrom(
                           backgroundColor: _isAiStreamRunning ? Colors.red : Colors.green,
                           foregroundColor: Colors.white,
